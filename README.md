@@ -1,52 +1,30 @@
 # BountyHunter — Free Games Scout
 
-Minimal standalone bot based on the '@SuaveIV/FamilyBot' `free_games` plugin (Discord adapter).
-It uses `discord.py` and a SQLite-backed store for per-server subscriptions.
+A Discord bot that automatically monitors Bluesky for free game announcements and posts them to your Discord server. Supports multiple game stores including Steam, Epic Games Store, itch.io, and PlayStation Store.
 
-Requirements
+## Features
 
-- Python 3.10+
-- Discord bot token with guild message permissions
+- 🎮 Multi-platform game tracking (Steam, Epic, itch.io, PlayStation)
+- 📱 Automatic Bluesky feed monitoring from @freegamefindings.bsky.social
+- 💾 SQLite-backed persistent storage with intelligent caching
+- 🔔 Per-server channel subscriptions with optional role mentions
+- 🔗 Reddit post expansion for detailed game information
+- 🎨 Rich Discord embeds with game details, images, and pricing
+- ⚙️ Configurable polling intervals and admin controls
+
+## Requirements
+
+- Python 3.11+
+- Discord bot token with required permissions (see below)
 - `mise` (optional, for tool management)
 - `uv` (optional, for fast dependency management)
 
-Environment variables
+## Environment Variables
 
-- BOT_TOKEN (required) — your Discord bot token
-- DATABASE_PATH (optional) — path to sqlite file, default `./data/bountyhunter.db`
-- POLL_INTERVAL (optional) — minutes between automatic checks (default `30`)
-- ADMIN_DISCORD_ID (optional) — discord user id allowed to run `!force_free` and receive admin DM on errors
-- LOG_LEVEL (optional) — default `INFO`
+Create a `.env` file based on `.env.template`:
 
-Discord Configuration
-
-1. Create a new Application in the Discord Developer Portal.
-2. Go to the **Bot** tab:
-   - Click **Add Bot**.
-   - Uncheck **Public Bot** (optional, keeps it private to you).
-   - Enable **Message Content Intent** (required for commands).
-   - Copy the **Token** (this is your `BOT_TOKEN`).
-3. To invite the bot:
-   - Go to **OAuth2** > **URL Generator**.
-   - Select `bot` scope.
-   - Select permissions: `Read Messages/View Channels`, `Send Messages`, `Embed Links`, `Read Message History`.
-   - Copy the generated URL and open it in your browser.
-   - *Note: You cannot set a "Default Authorization Link" for private bots; use the URL Generator instead.*
-
-Quick start (local)
-
-1. `just setup` (or `pip install -r requirements.txt`)
-2. `export BOT_TOKEN="..."`
-3. `just run` (or `python src/bounty_discord/run.py`)
-
-Docker
-
-- Build: docker build -t bountyhunter .
-- Run (example): docker run -e BOT_TOKEN="..." -v $(pwd)/data:/app/data bountyhunter
-
-What to implement next
-
-- Port the exact Bluesky parsing logic from FamilyBot `free_games.py`.
-- Implement SteamAPIManager and fetch_game_details parity (caching and dedupe).
-- Add tests (adapt `scripts/test_free_games.py`).
-- Add more per-server options (custom poll intervals, enable/disable, last-announced message).
+- **BOT_TOKEN** (required) — Your Discord bot token
+- **DATABASE_PATH** (optional) — Path to SQLite database file (default: `./data/bountyhunter.db`)
+- **POLL_INTERVAL** (optional) — Minutes between automatic checks (default: `30`)
+- **ADMIN_DISCORD_ID** (optional) — Discord user ID for admin commands and error notifications
+- **LOG_LEVEL** (optional) — Logging verbosity (default: `INFO`)
