@@ -1,0 +1,12 @@
+services:
+  bountyhunter:
+    build: .
+    restart: unless-stopped
+    volumes:
+      # Persist the SQLite database
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      # Override specific vars if needed
+      - LOG_LEVEL=INFO
