@@ -2,7 +2,6 @@ import datetime
 
 import aiohttp
 import discord
-from discord import app_commands
 from discord.ext import commands, tasks
 
 from bounty_core.epic import get_game_details as get_epic_details
@@ -34,49 +33,22 @@ logger = get_logger(__name__)
 SUPPORTS_SILENT = discord.version_info.major >= 2
 
 
-class HelpPaginationView(discord.ui.View):
-    def __init__(self, commands_list, per_page=5):
-        super().__init__(timeout=120)
-        self.commands_list = commands_list
-        self.per_page = per_page
-        self.current_page = 0
-        self.total_pages = max(1, (len(commands_list) + per_page - 1) // per_page)
-        self.update_buttons()
+def is_admin_dm():
+    """Check if the command is invoked by the admin in a DM channel."""
 
-    def update_buttons(self):
-        self.prev_button.disabled = self.current_page == 0
-        self.next_button.disabled = self.current_page >= self.total_pages - 1
+    async def predicate(ctx):
+        if not ADMIN_DISCORD_ID:
+            return False
+        if str(ctx.author.id) != str(ADMIN_DISCORD_ID):
+            return False
+        if not isinstance(ctx.channel, discord.DMChannel):
+            return False
+        return True
 
-    def create_embed(self):
-        start = self.current_page * self.per_page
-        end = start + self.per_page
-        page_cmds = self.commands_list[start:end]
-
-        embed = discord.Embed(
-            title="BountyHunter Help",
-            description=f"Here are the available commands (Page {self.current_page + 1}/{self.total_pages}):",
-            color=discord.Color.gold(),
-        )
-        for cmd in page_cmds:
-            embed.add_field(name=f"/bounty {cmd.name}", value=cmd.description, inline=False)
-        return embed
-
-    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
-    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page -= 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
-
-    @discord.ui.button(label="Next", style=discord.ButtonStyle.secondary)
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.current_page += 1
-        self.update_buttons()
-        await interaction.response.edit_message(embed=self.create_embed(), view=self)
+    return commands.check(predicate)
 
 
 class FreeGames(commands.Cog):
-    bounty = app_commands.Group(name="bounty", description="BountyHunter commands")
-
     def __init__(self, bot):
         self.bot = bot
         self.store = Store(DATABASE_PATH)
@@ -112,7 +84,7 @@ class FreeGames(commands.Cog):
     async def _create_game_embed(self, details: dict, parsed: dict) -> discord.Embed:
         """Creates a rich embed for a game announcement, matching FamilyBot style."""
         store_url = details.get("store_url", parsed.get("links", [""])[0])
-        
+
         # Determine store type
         is_steam = "store.steampowered.com" in store_url
         is_epic = "store.epicgames.com" in store_url
@@ -124,17 +96,17 @@ class FreeGames(commands.Cog):
         embed = discord.Embed()
         embed.title = f"FREE: {details.get('name', 'Unknown Game')}"
         embed.url = store_url
-        
+
         # Footer keeps BountyHunter branding but dynamic TARGET_ACTOR
         embed.set_footer(text=f"BountyHunter • Free Game Scout • {TARGET_ACTOR}")
 
         if is_steam:
             embed.color = discord.Color.from_str("#00FF00")  # Green
             embed.description = details.get("short_description", parsed.get("text", "")) or "No description available."
-            
+
             if details.get("image"):
                 embed.set_image(url=details["image"])
-            
+
             # Price Info
             price_info = details.get("price_info")
             if isinstance(price_info, dict):
@@ -187,11 +159,13 @@ class FreeGames(commands.Cog):
         elif is_amazon:
             embed.color = discord.Color.from_str("#00A8E1")  # Amazon Blue
             embed.description = "Claim this game for free with Amazon Prime Gaming!"
-            embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png")
+            embed.set_thumbnail(
+                url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png"
+            )
             embed.add_field(name="Platform", value="Amazon Prime Gaming", inline=True)
             if details.get("image"):
                 embed.set_image(url=details["image"])
-        
+
         elif is_ps:
             embed.color = discord.Color.blue()
             embed.description = "Claim this game for free on the PlayStation Store!"
@@ -423,35 +397,30 @@ class FreeGames(commands.Cog):
     async def before_scheduled_check(self):
         await self.bot.wait_until_ready()
 
-    @bounty.command(name="force_free", description="Force run the free games check")
-    async def force_free(self, interaction: discord.Interaction):
-        if ADMIN_DISCORD_ID and str(interaction.user.id) != str(ADMIN_DISCORD_ID):
-            await interaction.response.send_message("Unauthorized. Only admin may run this command.", ephemeral=True)
-            return
-        await interaction.response.send_message("Running free games check...", ephemeral=True)
+    # --- Admin DM Commands ---
+
+    @commands.command(name="force_free")
+    @is_admin_dm()
+    async def force_free(self, ctx: commands.Context):
+        """Force run the free games check (Admin DM only)."""
+        await ctx.send("Running free games check...")
         # Force run ignores first_run flag logic for this specific run
         await self._process_feed(manual=True)
 
-    @bounty.command(name="test_embed", description="Generate a test embed for a Steam ID")
-    @app_commands.describe(steam_id="The Steam App ID to test (default: 400)")
-    async def test_embed(self, interaction: discord.Interaction, steam_id: str = "400"):
-        if ADMIN_DISCORD_ID and str(interaction.user.id) != str(ADMIN_DISCORD_ID):
-            await interaction.response.send_message("Unauthorized. Only admin may run this command.", ephemeral=True)
-            return
-
-        await interaction.response.send_message(
-            f"🔍 Generating test embed for Steam ID: `{steam_id}`...", ephemeral=True
-        )
+    @commands.command(name="test_embed")
+    @is_admin_dm()
+    async def test_embed(self, ctx: commands.Context, steam_id: str = "400"):
+        """Generate a test embed for a Steam ID (Admin DM only)."""
+        await ctx.send(f"🔍 Generating test embed for Steam ID: `{steam_id}`...")
         if not self.steam_manager:
-            await interaction.followup.send("❌ Steam manager not initialized.", ephemeral=True)
+            await ctx.send("❌ Steam manager not initialized.")
             return
 
         details = await get_game_details(steam_id, self.steam_manager, self.store)
 
         if not details:
-            await interaction.followup.send(
-                f"❌ Could not fetch details for Steam ID `{steam_id}` (it might be invalid or hidden).",
-                ephemeral=True,
+            await ctx.send(
+                f"❌ Could not fetch details for Steam ID `{steam_id}` (it might be invalid or hidden)."
             )
             return
 
@@ -468,27 +437,24 @@ class FreeGames(commands.Cog):
 
         try:
             embed = await self._create_game_embed(details, parsed)
-            await interaction.followup.send("✅ Test embed generated:", embed=embed, ephemeral=True)
+            await ctx.send("✅ Test embed generated:", embed=embed)
         except Exception as e:
             logger.exception(f"Failed to create test embed: {e}")
-            await interaction.followup.send(f"❌ Failed to create embed: {e}", ephemeral=True)
+            await ctx.send(f"❌ Failed to create embed: {e}")
 
-    @bounty.command(name="test_embed_epic", description="Generate a test embed for an Epic Games slug")
-    @app_commands.describe(slug="The Epic Games Store slug (default: fortnite)")
-    async def test_embed_epic(self, interaction: discord.Interaction, slug: str = "fortnite"):
-        if ADMIN_DISCORD_ID and str(interaction.user.id) != str(ADMIN_DISCORD_ID):
-            await interaction.response.send_message("Unauthorized. Only admin may run this command.", ephemeral=True)
-            return
-
-        await interaction.response.send_message(f"🔍 Generating test embed for Epic Slug: `{slug}`...", ephemeral=True)
+    @commands.command(name="test_embed_epic")
+    @is_admin_dm()
+    async def test_embed_epic(self, ctx: commands.Context, slug: str = "fortnite"):
+        """Generate a test embed for an Epic Games slug (Admin DM only)."""
+        await ctx.send(f"🔍 Generating test embed for Epic Slug: `{slug}`...")
         if not self.epic_manager:
-            await interaction.followup.send("❌ Epic manager not initialized.", ephemeral=True)
+            await ctx.send("❌ Epic manager not initialized.")
             return
 
         details = await get_epic_details(slug, self.epic_manager, self.store)
 
         if not details:
-            await interaction.followup.send(f"❌ Could not fetch details for Epic slug `{slug}`.", ephemeral=True)
+            await ctx.send(f"❌ Could not fetch details for Epic slug `{slug}`.")
             return
 
         # Create mock parsed data for testing
@@ -504,27 +470,24 @@ class FreeGames(commands.Cog):
 
         try:
             embed = await self._create_game_embed(details, parsed)
-            await interaction.followup.send("✅ Test embed generated:", embed=embed, ephemeral=True)
+            await ctx.send("✅ Test embed generated:", embed=embed)
         except Exception as e:
             logger.exception(f"Failed to create test embed: {e}")
-            await interaction.followup.send(f"❌ Failed to create embed: {e}", ephemeral=True)
+            await ctx.send(f"❌ Failed to create embed: {e}")
 
-    @bounty.command(name="test_embed_itch", description="Generate a test embed for an itch.io URL")
-    @app_commands.describe(url="The itch.io game URL")
-    async def test_embed_itch(self, interaction: discord.Interaction, url: str):
-        if ADMIN_DISCORD_ID and str(interaction.user.id) != str(ADMIN_DISCORD_ID):
-            await interaction.response.send_message("Unauthorized. Only admin may run this command.", ephemeral=True)
-            return
-
-        await interaction.response.send_message("🔍 Generating test embed for itch.io URL...", ephemeral=True)
+    @commands.command(name="test_embed_itch")
+    @is_admin_dm()
+    async def test_embed_itch(self, ctx: commands.Context, url: str):
+        """Generate a test embed for an itch.io URL (Admin DM only)."""
+        await ctx.send("🔍 Generating test embed for itch.io URL...")
         if not self.itch_manager:
-            await interaction.followup.send("❌ Itch manager not initialized.", ephemeral=True)
+            await ctx.send("❌ Itch manager not initialized.")
             return
 
         details = await get_itch_details(url, self.itch_manager, self.store)
 
         if not details:
-            await interaction.followup.send("❌ Could not fetch details for itch.io URL.", ephemeral=True)
+            await ctx.send("❌ Could not fetch details for itch.io URL.")
             return
 
         # Create mock parsed data for testing
@@ -540,27 +503,24 @@ class FreeGames(commands.Cog):
 
         try:
             embed = await self._create_game_embed(details, parsed)
-            await interaction.followup.send("✅ Test embed generated:", embed=embed, ephemeral=True)
+            await ctx.send("✅ Test embed generated:", embed=embed)
         except Exception as e:
             logger.exception(f"Failed to create test embed: {e}")
-            await interaction.followup.send(f"❌ Failed to create embed: {e}", ephemeral=True)
+            await ctx.send(f"❌ Failed to create embed: {e}")
 
-    @bounty.command(name="test_embed_ps", description="Generate a test embed for a PlayStation Store URL")
-    @app_commands.describe(url="The PlayStation Store game URL")
-    async def test_embed_ps(self, interaction: discord.Interaction, url: str):
-        if ADMIN_DISCORD_ID and str(interaction.user.id) != str(ADMIN_DISCORD_ID):
-            await interaction.response.send_message("Unauthorized. Only admin may run this command.", ephemeral=True)
-            return
-
-        await interaction.response.send_message("🔍 Generating test embed for PlayStation Store URL...", ephemeral=True)
+    @commands.command(name="test_embed_ps")
+    @is_admin_dm()
+    async def test_embed_ps(self, ctx: commands.Context, url: str):
+        """Generate a test embed for a PlayStation Store URL (Admin DM only)."""
+        await ctx.send("🔍 Generating test embed for PlayStation Store URL...")
         if not self.ps_manager:
-            await interaction.followup.send("❌ PS manager not initialized.", ephemeral=True)
+            await ctx.send("❌ PS manager not initialized.")
             return
 
         details = await get_ps_details(url, self.ps_manager, self.store)
 
         if not details:
-            await interaction.followup.send("❌ Could not fetch details for PlayStation Store URL.", ephemeral=True)
+            await ctx.send("❌ Could not fetch details for PlayStation Store URL.")
             return
 
         # Create mock parsed data for testing
@@ -576,19 +536,16 @@ class FreeGames(commands.Cog):
 
         try:
             embed = await self._create_game_embed(details, parsed)
-            await interaction.followup.send("✅ Test embed generated:", embed=embed, ephemeral=True)
+            await ctx.send("✅ Test embed generated:", embed=embed)
         except Exception as e:
             logger.exception(f"Failed to create test embed: {e}")
-            await interaction.followup.send(f"❌ Failed to create embed: {e}", ephemeral=True)
+            await ctx.send(f"❌ Failed to create embed: {e}")
 
-    @bounty.command(name="test_scraper", description="Test the scraper feed")
-    @app_commands.describe(limit="Number of posts to fetch (default: 5)")
-    async def test_scraper(self, interaction: discord.Interaction, limit: int = 5):
-        if ADMIN_DISCORD_ID and str(interaction.user.id) != str(ADMIN_DISCORD_ID):
-            await interaction.response.send_message("Unauthorized. Only admin may run this command.", ephemeral=True)
-            return
-
-        await interaction.response.send_message(f"🔍 Testing scraper (fetching last {limit} posts)...", ephemeral=True)
+    @commands.command(name="test_scraper")
+    @is_admin_dm()
+    async def test_scraper(self, ctx: commands.Context, limit: int = 5):
+        """Test the scraper feed (Admin DM only)."""
+        await ctx.send(f"🔍 Testing scraper (fetching last {limit} posts)...")
 
         if not self._http_session:
             self._http_session = aiohttp.ClientSession()
@@ -598,10 +555,10 @@ class FreeGames(commands.Cog):
             posts = await fetcher.fetch_latest(limit=limit)
 
             if not posts:
-                await interaction.followup.send("❌ No posts found.", ephemeral=True)
+                await ctx.send("❌ No posts found.")
                 return
 
-            await interaction.followup.send(f"✅ Found {len(posts)} posts. Processing...", ephemeral=True)
+            await ctx.send(f"✅ Found {len(posts)} posts. Processing...")
 
             for idx, raw in enumerate(posts, 1):
                 uri = raw.get("uri")
@@ -675,33 +632,34 @@ class FreeGames(commands.Cog):
                         details = await get_ps_details(p_urls[0], self.ps_manager, self.store)
 
                     # Send result
-                    await interaction.followup.send(f"\n**Post {idx}/{len(posts)}:**", ephemeral=True)
+                    await ctx.send(f"\n**Post {idx}/{len(posts)}:**")
 
                     if details and "Unknown" not in details.get("name", "Unknown"):
                         try:
                             embed = await self._create_game_embed(details, parsed)
-                            await interaction.followup.send(embed=embed, ephemeral=True)
+                            await ctx.send(embed=embed)
                         except Exception as e:
                             logger.exception(f"Failed to create embed: {e}")
                             fallback = await self._create_fallback_message(parsed, None)
-                            await interaction.followup.send(fallback, ephemeral=True)
+                            await ctx.send(fallback)
                     else:
                         fallback = await self._create_fallback_message(parsed, None)
-                        await interaction.followup.send(fallback, ephemeral=True)
+                        await ctx.send(fallback)
                 else:
-                    await interaction.followup.send(
-                        f"**Post {idx}/{len(posts)}:** No valid game links found",
-                        ephemeral=True,
+                    await ctx.send(
+                        f"**Post {idx}/{len(posts)}:** No valid game links found"
                     )
 
-            await interaction.followup.send("✅ Scraper test complete.", ephemeral=True)
+            await ctx.send("✅ Scraper test complete.")
 
         except Exception as e:
             logger.exception("Scraper test failed: %s", e)
-            await interaction.followup.send(f"❌ Scraper test failed: {e}", ephemeral=True)
+            await ctx.send(f"❌ Scraper test failed: {e}")
 
-    @bounty.command(name="status", description="Show bot uptime and last check time")
-    async def status(self, interaction: discord.Interaction):
+    @commands.command(name="status")
+    @is_admin_dm()
+    async def status(self, ctx: commands.Context):
+        """Show bot uptime and last check time (Admin DM only)."""
         now = datetime.datetime.now(datetime.UTC)
         uptime = now - self.start_time
 
@@ -715,25 +673,23 @@ class FreeGames(commands.Cog):
         embed = discord.Embed(title="Bot Status", color=discord.Color.teal())
         embed.add_field(name="⏱️ Uptime", value=uptime_str, inline=True)
         embed.add_field(name="🔄 Last Check", value=last_check, inline=True)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await ctx.send(embed=embed)
 
-    @bounty.command(name="myid", description="Get your Discord ID")
-    async def myid(self, interaction: discord.Interaction):
-        await interaction.response.send_message(f"Your ID: `{interaction.user.id}`", ephemeral=True)
+    @commands.command(name="myid")
+    @is_admin_dm()
+    async def myid(self, ctx: commands.Context):
+        """Get your Discord ID (Admin DM only)."""
+        await ctx.send(f"Your ID: `{ctx.author.id}`")
 
-    @bounty.command(name="help", description="List all available BountyHunter commands")
-    async def help(self, interaction: discord.Interaction):
-        commands_list = sorted(self.bounty.commands, key=lambda c: c.name)
-        view = HelpPaginationView(commands_list, per_page=5)
-        await interaction.response.send_message(embed=view.create_embed(), view=view, ephemeral=True)
+    # --- Guild Commands ---
 
-    # Subscribe command (requires Manage Guild)
     @commands.command(name="subscribe")
     @commands.has_permissions(manage_guild=True)
     async def subscribe_command(self, ctx: commands.Context, role: discord.Role | None = None):
+        """Subscribe the current channel to free game announcements (Guild only)."""
         try:
             if not ctx.guild:
-                await self._send(ctx, "Subscription only works within a guild.", silent=True)
+                await ctx.send("Subscription only works within a guild.")
                 return
 
             role_id = role.id if role else None
@@ -752,47 +708,13 @@ class FreeGames(commands.Cog):
         if isinstance(error, commands.MissingPermissions):
             await self._send(ctx, "You need Manage Guild permission to run this.", silent=True)
 
-    @commands.command(name="sync")
-    async def sync_command(self, ctx: commands.Context, spec: str | None = None):
-        """
-        Manually syncs slash commands.
-        Usage:
-        !sync        -> Syncs to current guild (instant)
-        !sync global -> Syncs globally (takes up to 1 hour, required for DMs)
-        """
-        if ADMIN_DISCORD_ID and str(ctx.author.id) != str(ADMIN_DISCORD_ID):
-            await self._send(ctx, "Unauthorized.", silent=True)
-            return
-
-        target_str = "globally" if spec == "global" else "to this guild"
-        await self._send(ctx, f"Syncing commands {target_str}...", silent=True)
-
-        try:
-            if spec == "global":
-                synced = await self.bot.tree.sync()
-                await self._send(
-                    ctx,
-                    f"✅ Synced {len(synced)} commands globally. (May take up to 1 hour to appear in DMs)",
-                    silent=True,
-                )
-            elif ctx.guild:
-                self.bot.tree.copy_global_to(guild=ctx.guild)
-                synced = await self.bot.tree.sync(guild=ctx.guild)
-                await self._send(ctx, f"✅ Synced {len(synced)} commands to this guild.", silent=True)
-            else:
-                await self._send(
-                    ctx, "❌ Sync command must be run in a guild to be effective immediately.", silent=True
-                )
-        except Exception as e:
-            logger.exception("Sync failed: %s", e)
-            await self._send(ctx, f"❌ Sync failed: {e}", silent=True)
-
     @commands.command(name="unsubscribe")
     @commands.has_permissions(manage_guild=True)
     async def unsubscribe_command(self, ctx: commands.Context):
+        """Unsubscribe the current channel from free game announcements (Guild only)."""
         try:
             if not ctx.guild:
-                await self._send(ctx, "Unsubscribe only works within a guild.", silent=True)
+                await ctx.send("Unsubscribe only works within a guild.")
                 return
             await self.store.remove_subscription(ctx.guild.id, ctx.channel.id)
             await self._send(ctx, "This channel has been unsubscribed.", silent=True)

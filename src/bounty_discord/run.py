@@ -24,11 +24,8 @@ async def main():
     async def on_ready():
         if bot.user:
             logger.info(f"Logged in as {bot.user} (ID: {bot.user.id})")
-        try:
-            synced = await bot.tree.sync()
-            logger.info(f"Synced {len(synced)} command(s)")
-        except Exception as e:
-            logger.error(f"Failed to sync commands: {e}")
+        # Slash commands removed, no sync needed.
+        logger.info("Bot is ready to process prefix commands.")
 
     async with bot:
         await bot.add_cog(FreeGames(bot))
