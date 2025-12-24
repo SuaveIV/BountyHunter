@@ -7,7 +7,7 @@ from discord.ext import commands, tasks
 
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.epic_api_manager import EpicAPIManager
-from bounty_core.fetcher import BlueskyFetcher
+from bounty_core.fetcher import TARGET_ACTOR, BlueskyFetcher
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
 from bounty_core.parser import (
@@ -110,99 +110,137 @@ class FreeGames(commands.Cog):
         return await target.send(**kwargs)
 
     async def _create_game_embed(self, details: dict, parsed: dict) -> discord.Embed:
-        """Creates a rich embed for a game announcement."""
-        color = discord.Color.green() if details.get("is_free") else discord.Color.blue()
-        embed = discord.Embed(
-            title=details.get("name", "Unknown Game"),
-            description=parsed.get("text", ""),
-            color=color,
-        )
-        if details.get("image"):
-            embed.set_image(url=details["image"])
-        if details.get("price_info"):
-            embed.add_field(name="Price", value=str(details["price_info"]), inline=True)
-        if details.get("release_date"):
-            embed.add_field(name="Release Date", value=str(details["release_date"]), inline=True)
+        """Creates a rich embed for a game announcement, matching FamilyBot style."""
+        store_url = details.get("store_url", parsed.get("links", [""])[0])
+        
+        # Determine store type
+        is_steam = "store.steampowered.com" in store_url
+        is_epic = "store.epicgames.com" in store_url
+        is_itch = "itch.io" in store_url
+        is_gog = "gog.com" in store_url
+        is_ps = "store.playstation.com" in store_url
+        is_amazon = "amazon.com" in store_url or "gaming.amazon.com" in store_url
 
-        # Add store link
-        if details.get("store_url"):
-            embed.add_field(name="🎮 Store Page", value=f"[View on Store]({details['store_url']})", inline=False)
+        embed = discord.Embed()
+        embed.title = f"FREE: {details.get('name', 'Unknown Game')}"
+        embed.url = store_url
+        
+        # Footer keeps BountyHunter branding but dynamic TARGET_ACTOR
+        embed.set_footer(text=f"BountyHunter • Free Game Scout • {TARGET_ACTOR}")
 
-        # Improved link filtering to avoid duplicates
+        if is_steam:
+            embed.color = discord.Color.from_str("#00FF00")  # Green
+            embed.description = details.get("short_description", parsed.get("text", "")) or "No description available."
+            
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+            
+            # Price Info
+            price_info = details.get("price_info")
+            if isinstance(price_info, dict):
+                original = price_info.get("original_price", "N/A")
+                discount = price_info.get("discount_percent", 0)
+                embed.add_field(name="Price", value=f"~~{original}~~ -> FREE ({discount}% off)", inline=True)
+            elif isinstance(price_info, str):
+                embed.add_field(name="Price", value=price_info, inline=True)
+
+            # Reviews
+            if details.get("review_summary"):
+                embed.add_field(name="Reviews", value=details["review_summary"], inline=True)
+
+            # Release Date
+            if details.get("release_date"):
+                embed.add_field(name="Release Date", value=str(details["release_date"]), inline=True)
+
+            # Creators
+            developers = details.get("developers", [])
+            publishers = details.get("publishers", [])
+            if developers or publishers:
+                dev_str = ", ".join(developers) if developers else "N/A"
+                pub_str = ", ".join(publishers) if publishers else "N/A"
+                embed.add_field(name="Creator(s)", value=f"**Dev:** {dev_str}\n**Pub:** {pub_str}", inline=True)
+
+        elif is_epic:
+            embed.color = discord.Color.from_str("#0078F2")  # Epic Blue
+            embed.description = "Claim this game for free on the Epic Games Store!"
+            embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2699/PNG/128/epic_games_logo_icon_169084.png")
+            embed.add_field(name="Platform", value="Epic Games Store", inline=True)
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+
+        elif is_itch:
+            embed.color = discord.Color.from_str("#FA5C5C")  # Itch Pink
+            embed.description = "Claim this game for free on Itch.io!"
+            embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2428/PNG/512/itch_io_logo_icon_147227.png")
+            embed.add_field(name="Platform", value="Itch.io", inline=True)
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+
+        elif is_gog:
+            embed.color = discord.Color.from_str("#8A4399")  # GOG Purple
+            embed.description = "Claim this game for free on GOG.com!"
+            embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png")
+            embed.add_field(name="Platform", value="GOG.com", inline=True)
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+
+        elif is_amazon:
+            embed.color = discord.Color.from_str("#00A8E1")  # Amazon Blue
+            embed.description = "Claim this game for free with Amazon Prime Gaming!"
+            embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png")
+            embed.add_field(name="Platform", value="Amazon Prime Gaming", inline=True)
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+        
+        elif is_ps:
+            embed.color = discord.Color.blue()
+            embed.description = "Claim this game for free on the PlayStation Store!"
+            embed.add_field(name="Platform", value="PlayStation Store", inline=True)
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+
+        else:
+            # Fallback for generic sites
+            embed.color = discord.Color.green()
+            embed.description = parsed.get("text", "Free game announcement")
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+
+        # Retain original link logic for "Additional Links" and "Sources"
         def normalize_url(url: str) -> str:
-            """Normalize URL for comparison by removing trailing slashes, query params, and lowercasing."""
             if not url:
                 return ""
-            # Remove query parameters and fragments
-            url = url.split("?")[0].split("#")[0]
-            # Remove trailing slashes
-            url = url.rstrip("/")
-            # Lowercase for comparison
-            return url.lower()
+            return url.split("?")[0].split("#")[0].rstrip("/").lower()
 
-        # Get normalized store URL
-        store_url_norm = normalize_url(details.get("store_url", ""))
-
-        # Build set of normalized URLs to exclude
-        exclude_urls = set()
-        if store_url_norm:
-            exclude_urls.add(store_url_norm)
-
-        # Add all source links to exclusion set
+        exclude_urls = {normalize_url(store_url)}
         source_set = set(parsed.get("source_links", []))
         for source in source_set:
             exclude_urls.add(normalize_url(source))
 
-        # Add all store-specific URLs to exclusion set (they're already in details.store_url)
-        for steam_id in parsed.get("steam_app_ids", []):
-            exclude_urls.add(normalize_url(f"https://store.steampowered.com/app/{steam_id}"))
-            exclude_urls.add(normalize_url(f"https://store.steampowered.com/app/{steam_id}/"))
-
-        for epic_slug in parsed.get("epic_slugs", []):
-            exclude_urls.add(normalize_url(f"https://store.epicgames.com/p/{epic_slug}"))
-            exclude_urls.add(normalize_url(f"https://store.epicgames.com/en-us/p/{epic_slug}"))
-
-        for itch_url in parsed.get("itch_urls", []):
-            exclude_urls.add(normalize_url(itch_url))
-
-        for ps_url in parsed.get("ps_urls", []):
-            exclude_urls.add(normalize_url(ps_url))
-
-        # Filter other links
         other_links = []
         seen_normalized = set()
-
         for link in parsed.get("links", []):
             norm_link = normalize_url(link)
-
-            # Skip if it's a store URL, source URL, or already seen
             if norm_link in exclude_urls or norm_link in seen_normalized:
                 continue
-
             seen_normalized.add(norm_link)
             other_links.append(link)
 
-        # Add direct links if any (max 5, Discord field value limit)
         if other_links:
             links_text = "\n".join([f"• [Link {i + 1}]({link})" for i, link in enumerate(other_links[:5])])
             if len(other_links) > 5:
                 links_text += f"\n*...and {len(other_links) - 5} more*"
-
-            # Ensure it fits in field value limit
             if len(links_text) <= 1024:
                 embed.add_field(name="🔗 Additional Links", value=links_text, inline=False)
 
-        # Add source links (Reddit posts, etc.)
-        sources = parsed.get("source_links", [])
-        if sources:
+        if source_set:
+            sources = list(source_set)
             sources_text = "\n".join([f"• [Source {i + 1}]({link})" for i, link in enumerate(sources[:3])])
             if len(sources) > 3:
                 sources_text += f"\n*...and {len(sources) - 3} more*"
-
             if len(sources_text) <= 1024:
                 embed.add_field(name="📰 Sources", value=sources_text, inline=False)
 
-        embed.set_footer(text="BountyHunter • Free Game Scout")
         return embed
 
     async def _create_fallback_message(self, parsed: dict, role_id: int | None) -> str:
