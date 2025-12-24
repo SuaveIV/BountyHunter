@@ -419,9 +419,7 @@ class FreeGames(commands.Cog):
         details = await get_game_details(steam_id, self.steam_manager, self.store)
 
         if not details:
-            await ctx.send(
-                f"❌ Could not fetch details for Steam ID `{steam_id}` (it might be invalid or hidden)."
-            )
+            await ctx.send(f"❌ Could not fetch details for Steam ID `{steam_id}` (it might be invalid or hidden).")
             return
 
         # Create mock parsed data for testing
@@ -646,9 +644,7 @@ class FreeGames(commands.Cog):
                         fallback = await self._create_fallback_message(parsed, None)
                         await ctx.send(fallback)
                 else:
-                    await ctx.send(
-                        f"**Post {idx}/{len(posts)}:** No valid game links found"
-                    )
+                    await ctx.send(f"**Post {idx}/{len(posts)}:** No valid game links found")
 
             await ctx.send("✅ Scraper test complete.")
 

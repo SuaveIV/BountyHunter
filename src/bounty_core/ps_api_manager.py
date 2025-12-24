@@ -69,6 +69,17 @@ class PSAPIManager:
                 data = json.loads(script.string)
                 # Check if this specific script describes the product
                 if data.get("@type") in ["Product", "VideoGame"]:
+                    # Fallback for Name and Image from JSON-LD
+                    if name == "Unknown PS Game":
+                        name = data.get("name", name)
+
+                    if not image:
+                        img_data = data.get("image")
+                        if isinstance(img_data, list):
+                            image = img_data[0]
+                        elif isinstance(img_data, str):
+                            image = img_data
+
                     offers = data.get("offers", {})
                     if isinstance(offers, list):
                         offers = offers[0] if offers else {}
