@@ -37,40 +37,41 @@ class ItchAPIManager:
         soup = BeautifulSoup(html, "html.parser")
 
         # 1. Try to parse JSON-LD (Structured Data)
-        script_tag = soup.find("script", type="application/ld+json")
-        if script_tag and script_tag.string:
-            try:
-                data = json.loads(script_tag.string)
-                # Ensure it's the game object
-                if data.get("@type") in ("SoftwareApplication", "VideoGame", "Product"):
-                    offers = data.get("offers", {})
-                    price = offers.get("price", "0.00")
-                    currency = offers.get("priceCurrency", "USD")
+        script_tags = soup.find_all("script", type="application/ld+json")
+        for script_tag in script_tags:
+            if script_tag.string:
+                try:
+                    data = json.loads(script_tag.string)
+                    # Ensure it's the game object
+                    if data.get("@type") in ("SoftwareApplication", "VideoGame", "Product"):
+                        offers = data.get("offers", {})
+                        price = offers.get("price", "0.00")
+                        currency = offers.get("priceCurrency", "USD")
 
-                    # Itch uses "0.00" for free games
-                    is_free = False
-                    try:
-                        is_free = float(price) == 0.0
-                    except ValueError:
-                        pass
+                        # Itch uses "0.00" for free games
+                        is_free = False
+                        try:
+                            is_free = float(price) == 0.0
+                        except ValueError:
+                            pass
 
-                    author = data.get("author", {})
-                    if isinstance(author, dict):
-                        developer = author.get("name", "Unknown")
-                    else:
-                        developer = "Unknown"
+                        author = data.get("author", {})
+                        if isinstance(author, dict):
+                            developer = author.get("name", "Unknown")
+                        else:
+                            developer = "Unknown"
 
-                    return {
-                        "name": data.get("name", "Unknown Itch Game"),
-                        "is_free": is_free,
-                        "developers": [developer],
-                        "publishers": ["itch.io"],
-                        "release_date": data.get("datePublished"),
-                        "image": data.get("image"),
-                        "price_info": "Free to Play" if is_free else f"{price} {currency}",
-                    }
-            except Exception as e:
-                logger.warning(f"Failed to parse JSON-LD for {url}: {e}")
+                        return {
+                            "name": data.get("name", "Unknown Itch Game"),
+                            "is_free": is_free,
+                            "developers": [developer],
+                            "publishers": ["itch.io"],
+                            "release_date": data.get("datePublished"),
+                            "image": data.get("image"),
+                            "price_info": "Free to Play" if is_free else f"{price} {currency}",
+                        }
+                except Exception as e:
+                    logger.warning(f"Failed to parse JSON-LD for {url}: {e}")
 
         # 2. Fallback: BS4 Scraping
         name = "Unknown Itch Game"

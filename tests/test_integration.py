@@ -44,6 +44,7 @@ async def test_itch_integration(session, store):
 
     if details:
         assert details["name"] is not None
+        assert "DELTARUNE" in details["name"]
         assert "itch.io" in details["publishers"]
     else:
         pytest.skip("Itch.io request failed or page layout changed")
