@@ -574,6 +574,88 @@ class FreeGames(commands.Cog):
             logger.exception(f"Failed to create test embed: {e}")
             await ctx.send(f"❌ Failed to create embed: {e}")
 
+    @commands.command(name="test_embed_url")
+    @is_admin_dm()
+    async def test_embed_url(self, ctx: commands.Context, url: str, *, text: str = "Free Game Announcement"):
+        """
+        Generate a test embed for any URL (GOG, Amazon, Stove, etc.).
+        Usage: !test_embed_url <url> [optional text simulating the post]
+        """
+        await ctx.send(f"🔍 Generating test embed for URL: `{url}`...")
+
+        # Create mock parsed data
+        parsed = {
+            "text": text,
+            "links": [url],
+            "source_links": [],
+            "steam_app_ids": [],
+            "epic_slugs": [],
+            "itch_urls": [],
+            "ps_urls": [],
+        }
+
+        # Use the same fallback logic as in scraper
+        title = extract_game_title(text) or "Free Game"
+        # If user provided simple text that isn't a full FGF post, use it as title if extract failed
+        if title == "Free Game" and text != "Free Game Announcement":
+            # Heuristic: if text is short, assume it's the title
+            if len(text) < 50:
+                title = text
+
+        details = {
+            "name": title,
+            "store_url": url,
+            "image": None,
+        }
+
+        try:
+            embed = await self._create_game_embed(details, parsed)
+            await ctx.send("✅ Test embed generated:", embed=embed)
+        except Exception as e:
+            logger.exception(f"Failed to create test embed: {e}")
+            await ctx.send(f"❌ Failed to create embed: {e}")
+
+    @commands.command(name="test_embed_all")
+    @is_admin_dm()
+    async def test_embed_all(self, ctx: commands.Context):
+        """Generate example embeds for all supported stores."""
+        await ctx.send("🚀 Generating example embeds for all supported stores...")
+
+        # 1. Steam (Portal)
+        await self.test_embed(ctx, steam_id="400")
+
+        # 2. Epic (Fortnite)
+        await self.test_embed_epic(ctx, slug="fortnite")
+
+        # 3. Itch.io (Deltarune)
+        await self.test_embed_itch(ctx, url="https://tobyfox.itch.io/deltarune")
+
+        # 4. GOG
+        await self.test_embed_url(
+            ctx, url="https://www.gog.com/en/game/cyberpunk_2077", text="[GOG] Cyberpunk 2077 is free on GOG!"
+        )
+
+        # 5. Amazon Prime
+        await self.test_embed_url(
+            ctx, url="https://gaming.amazon.com/loot/fallout", text="[Prime] Fallout 76 is free with Prime Gaming!"
+        )
+
+        # 6. STOVE
+        await self.test_embed_url(
+            ctx,
+            url="https://store.onstove.com/en/games/1234",
+            text="[STOVE] SNK 40th Anniversary Collection is free on STOVE!",
+        )
+
+        # 7. PlayStation (Generic fallback as we don't have a stable ID for scraping)
+        await self.test_embed_url(
+            ctx,
+            url="https://store.playstation.com/en-us/product/UP9000-CUSA00917_00-THELASTOFUS00000",
+            text="[PS4] The Last of Us Remastered is free!",
+        )
+
+        await ctx.send("✅ All examples generated.")
+
     @commands.command(name="test_scraper")
     @is_admin_dm()
     async def test_scraper(self, ctx: commands.Context, limit: int = 5):
