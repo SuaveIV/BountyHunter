@@ -38,8 +38,8 @@ async def test_epic_integration(session, store):
 async def test_itch_integration(session, store):
     """Test scraping an itch.io page."""
     manager = ItchAPIManager(session)
-    # Using a known game URL (Vimlark is a consistent dev)
-    url = "https://vimlark.itch.io/ynglet"
+    # Using a known game URL
+    url = "https://tobyfox.itch.io/deltarune"
     details = await get_itch_details(url, manager, store)
 
     if details:
