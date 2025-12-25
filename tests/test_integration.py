@@ -1,8 +1,11 @@
+import os
+
 import pytest
 
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.epic_api_manager import EpicAPIManager
 from bounty_core.fetcher import BlueskyFetcher
+from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
 from bounty_core.parser import extract_links
@@ -44,6 +47,26 @@ async def test_itch_integration(session, store):
         assert "itch.io" in details["publishers"]
     else:
         pytest.skip("Itch.io request failed or page layout changed")
+
+
+@pytest.mark.asyncio
+async def test_itad_integration(session):
+    """Test ITAD API if key is present."""
+    api_key = os.getenv("ITAD_API_KEY")
+    if not api_key:
+        pytest.skip("ITAD_API_KEY not set")
+
+    manager = ItadAPIManager(session, api_key)
+    # Search for a known game
+    results = await manager.search_game("Portal")
+    assert results
+    assert any(g["title"] == "Portal" for g in results)
+
+    # Check price
+    best = await manager.get_best_price("Portal")
+    assert best is not None
+    assert "game_info" in best
+    assert "price_info" in best
 
 
 @pytest.mark.asyncio

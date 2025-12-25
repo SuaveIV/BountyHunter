@@ -7,6 +7,7 @@ from discord.ext import commands, tasks
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.epic_api_manager import EpicAPIManager
 from bounty_core.fetcher import TARGET_ACTOR, BlueskyFetcher
+from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
 from bounty_core.parser import (
@@ -25,7 +26,7 @@ from bounty_core.steam import get_game_details
 from bounty_core.steam_api_manager import SteamAPIManager
 from bounty_core.store import Store
 
-from .config import ADMIN_DISCORD_ID, DATABASE_PATH, POLL_INTERVAL
+from .config import ADMIN_DISCORD_ID, DATABASE_PATH, ITAD_API_KEY, POLL_INTERVAL
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -60,6 +61,7 @@ class FreeGames(commands.Cog):
         self.epic_manager = EpicAPIManager(session=self._http_session)
         self.itch_manager = ItchAPIManager(session=self._http_session)
         self.ps_manager = PSAPIManager(session=self._http_session)
+        self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
 
         if not ADMIN_DISCORD_ID:
             logger.warning("ADMIN_DISCORD_ID is not set. Admin commands and error DMs will be disabled.")
@@ -676,6 +678,56 @@ class FreeGames(commands.Cog):
     async def myid(self, ctx: commands.Context):
         """Get your Discord ID (Admin DM only)."""
         await ctx.send(f"Your ID: `{ctx.author.id}`")
+
+    @commands.command(name="price")
+    async def check_price(self, ctx: commands.Context, *, title: str):
+        """Check price of a game using IsThereAnyDeal."""
+        await ctx.send(f"🔍 Checking price for `{title}`...")
+
+        if not ITAD_API_KEY:
+            await ctx.send("❌ ITAD API Key is not configured.")
+            return
+
+        result = await self.itad_manager.get_best_price(title)
+        if not result:
+            await ctx.send("❌ Game not found or no price info available.")
+            return
+
+        game = result["game_info"]
+        price = result["price_info"]
+
+        current = price.get("current")
+        lowest = price.get("lowest")
+
+        embed = discord.Embed(title=game.get("title", title), url=price["urls"]["game"])
+        assets = game.get("assets", {})
+        if assets and assets.get("banner400"):
+            embed.set_image(url=assets["banner400"])
+
+        if current:
+            shop_name = current.get("shop", {}).get("name", "Unknown")
+            amount = current.get("price", {}).get("amount", 0)
+            currency = current.get("price", {}).get("currency", "USD")
+            url = current.get("url", "")
+            embed.add_field(
+                name="Current Best Price",
+                value=f"**{amount} {currency}** at [{shop_name}]({url})",
+                inline=False,
+            )
+
+        if lowest:
+            shop_name = lowest.get("shop", {}).get("name", "Unknown")
+            amount = lowest.get("price", {}).get("amount", 0)
+            currency = lowest.get("price", {}).get("currency", "USD")
+            timestamp = lowest.get("timestamp", "")
+            embed.add_field(
+                name="Historical Low",
+                value=f"{amount} {currency} at {shop_name} ({timestamp})",
+                inline=False,
+            )
+
+        embed.set_footer(text="Powered by IsThereAnyDeal")
+        await ctx.send(embed=embed)
 
     # --- Guild Commands ---
 
