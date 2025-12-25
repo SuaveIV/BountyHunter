@@ -1,7 +1,10 @@
 import aiohttp
 import pytest_asyncio
+from dotenv import load_dotenv
 
 from bounty_core.store import Store
+
+load_dotenv()
 
 
 @pytest_asyncio.fixture

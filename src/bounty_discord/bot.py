@@ -12,6 +12,7 @@ from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
 from bounty_core.parser import (
     extract_epic_slugs,
+    extract_game_title,
     extract_itch_urls,
     extract_links,
     extract_links_from_reddit_json,
@@ -94,6 +95,7 @@ class FreeGames(commands.Cog):
         is_gog = "gog.com" in store_url
         is_ps = "store.playstation.com" in store_url
         is_amazon = "amazon.com" in store_url or "gaming.amazon.com" in store_url
+        is_stove = "stove.com" in store_url or "onstove.com" in store_url
 
         embed = discord.Embed()
         embed.title = f"FREE: {details.get('name', 'Unknown Game')}"
@@ -175,10 +177,18 @@ class FreeGames(commands.Cog):
             if details.get("image"):
                 embed.set_image(url=details["image"])
 
+        elif is_stove:
+            embed.color = discord.Color.from_str("#FF6B00")  # STOVE Orange
+            embed.description = "Claim this game for free on STOVE!"
+            embed.add_field(name="Platform", value="STOVE", inline=True)
+            if details.get("image"):
+                embed.set_image(url=details["image"])
+
         else:
             # Fallback for generic sites
             embed.color = discord.Color.green()
-            embed.description = parsed.get("text", "Free game announcement")
+            # If description is not provided in details, use text
+            embed.description = details.get("description") or parsed.get("text", "Free game announcement")
             if details.get("image"):
                 embed.set_image(url=details["image"])
 
@@ -319,6 +329,9 @@ class FreeGames(commands.Cog):
                         "itch_urls": list(itch_urls),
                         "ps_urls": list(ps_urls),
                     }
+                    if "embed" in raw and "external" in raw["embed"] and "thumb" in raw["embed"]["external"]:
+                        parsed["image"] = raw["embed"]["external"]["thumb"]
+
                     new_announcements.append((uri, parsed))
                     await self.store.mark_post_seen(uri)
 
@@ -353,6 +366,26 @@ class FreeGames(commands.Cog):
                 details = await get_itch_details(itch_urls[0], self.itch_manager, self.store)
             elif ps_urls and self.ps_manager:
                 details = await get_ps_details(ps_urls[0], self.ps_manager, self.store)
+
+            # Fallback: if no specific manager handled it, but we have links, try to create a generic details object
+            if not details and parsed.get("links"):
+                valid_links = parsed["links"]
+                text = parsed["text"]
+                fallback_url = None
+                # Prioritize known stores
+                for link in valid_links:
+                    if any(d in link for d in ["gog.com", "amazon.com", "onstove.com", "stove.com"]):
+                        fallback_url = link
+                        break
+                if not fallback_url:
+                    fallback_url = valid_links[0]
+
+                title = extract_game_title(text) or "Free Game"
+                details = {
+                    "name": title,
+                    "store_url": fallback_url,
+                    "image": parsed.get("image"),
+                }
 
             for _guild_id, channel_id, role_id in subs:
                 try:
@@ -630,6 +663,25 @@ class FreeGames(commands.Cog):
                         details = await get_itch_details(i_urls[0], self.itch_manager, self.store)
                     elif p_urls and self.ps_manager:
                         details = await get_ps_details(p_urls[0], self.ps_manager, self.store)
+
+                    # Fallback logic for test_scraper
+                    if not details and valid_links:
+                        fallback_url = None
+                        for link in valid_links:
+                            if any(d in link for d in ["gog.com", "amazon.com", "onstove.com", "stove.com"]):
+                                fallback_url = link
+                                break
+                        if not fallback_url:
+                            fallback_url = list(valid_links)[0]
+
+                        title = extract_game_title(text) or "Free Game"
+                        details = {
+                            "name": title,
+                            "store_url": fallback_url,
+                            "image": None,
+                        }
+                        if "embed" in raw and "external" in raw["embed"] and "thumb" in raw["embed"]["external"]:
+                            details["image"] = raw["embed"]["external"]["thumb"]
 
                     # Send result
                     await ctx.send(f"\n**Post {idx}/{len(posts)}:**")

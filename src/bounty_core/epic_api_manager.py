@@ -7,6 +7,15 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/114.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
 
 class EpicAPIManager:
     def __init__(self, session: aiohttp.ClientSession):
@@ -25,7 +34,7 @@ class EpicAPIManager:
 
         url = "https://store-site-backend-static-ipv4.ak.epicgames.com/freeGamesPromotions"
         try:
-            async with self.session.get(url) as resp:
+            async with self.session.get(url, headers=HEADERS) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     # The structure is deeply nested
@@ -43,7 +52,7 @@ class EpicAPIManager:
         # 1. Try CMS API
         cms_url = f"https://store-content.ak.epicgames.com/api/en-US/content/products/{slug}"
         try:
-            async with self.session.get(cms_url) as resp:
+            async with self.session.get(cms_url, headers=HEADERS) as resp:
                 if resp.status == 200:
                     cms_data = await resp.json()
                     await self._ensure_free_games_cache()
@@ -67,15 +76,7 @@ class EpicAPIManager:
     async def _scrape_store_page(self, slug: str) -> dict | None:
         url = f"https://store.epicgames.com/en-US/p/{slug}"
         try:
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/91.0.4472.124 Safari/537.36"
-                ),
-                "Accept-Language": "en-US,en;q=0.9",
-            }
-            async with self.session.get(url, headers=headers) as resp:
+            async with self.session.get(url, headers=HEADERS) as resp:
                 if resp.status != 200:
                     logger.warning(f"Epic Store page returned {resp.status} for {slug}")
                     return None

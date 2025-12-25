@@ -12,6 +12,23 @@ REDDIT_REGEX = re.compile(
     r"https?://(?:www\.|old\.|new\.)?reddit\.com/r/[^/]+/comments/[^/]+|https?://redd\.it/[a-zA-Z0-9]+",
     re.IGNORECASE,
 )
+FGF_TITLE_REGEX = re.compile(r"^[\[\(].*?[\]\)]\s*(?:\(.*?\)\s*)?(.+?) is free", re.IGNORECASE)
+FGF_PSA_REGEX = re.compile(r"^\[PSA\]\s*(.+?)\s*(?:are|is) complimentary", re.IGNORECASE)
+
+
+def extract_game_title(text: str) -> str | None:
+    """Attempts to extract the game title from the post text."""
+    # Try generic 'is free' pattern
+    match = FGF_TITLE_REGEX.search(text)
+    if match:
+        return match.group(1).strip()
+
+    # Try PSA pattern
+    match = FGF_PSA_REGEX.search(text)
+    if match:
+        return match.group(1).strip()
+
+    return None
 
 
 def extract_steam_ids(text: str) -> set[str]:
