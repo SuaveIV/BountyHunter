@@ -1,30 +1,90 @@
 # BountyHunter — Free Games Scout
 
-A Discord bot that automatically monitors Bluesky for free game announcements and posts them to your Discord server. Supports multiple game stores including Steam, Epic Games Store, itch.io, and PlayStation Store.
+A Discord bot that automatically monitors Bluesky for free game announcements and posts them to your Discord server. Supports multiple game stores including Steam, Epic Games Store, itch.io, PlayStation Store, GOG, and Amazon Prime Gaming.
 
 ## Features
 
-- 🎮 Multi-platform game tracking (Steam, Epic, itch.io, PlayStation)
-- 📱 Automatic Bluesky feed monitoring from @freegamefindings.bsky.social
-- 💾 SQLite-backed persistent storage with intelligent caching
-- 🔔 Per-server channel subscriptions with optional role mentions
-- 🔗 Reddit post expansion for detailed game information
-- 🎨 Rich Discord embeds with game details, images, and pricing
-- ⚙️ Configurable polling intervals and admin controls
+- 🎮 **Multi-platform game tracking**: Steam, Epic Games Store, itch.io, PlayStation Store, GOG, and Amazon Prime Gaming.
+- 📱 **Automatic Bluesky feed monitoring**: Tracks [@freegamefindings.bsky.social](https://bsky.app/profile/freegamefindings.bsky.social) for the latest deals.
+- 💰 **Price Checking**: Check game prices and historical lows using IsThereAnyDeal (`!price`).
+- 💾 **Persistent Storage**: SQLite-backed storage with intelligent caching to prevent duplicate posts.
+- 🔔 **Smart Notifications**: Per-server channel subscriptions with optional role pings.
+- 🔗 **Rich Content**: Expands Reddit posts and generates detailed embeds with game info, images, and pricing.
+- ⚙️ **Configurable**: Adjustable polling intervals and extensive admin controls.
+
+## Commands
+
+### Public Commands
+
+- `!subscribe [role]` — Subscribe the current channel to free game announcements. Optionally tag a role.
+  - *Requires "Manage Guild" permission.*
+- `!unsubscribe` — Unsubscribe the current channel.
+  - *Requires "Manage Guild" permission.*
+- `!price <game title>` — Check the current best price and historical low for a game via IsThereAnyDeal.
+
+### Admin Commands (DM Only)
+
+*Requires `ADMIN_DISCORD_ID` to be set in `.env`.*
+
+- `!status` — Show bot uptime and last check time.
+- `!force_free` — Force a check for free games immediately.
+- `!test_embed <steam_id>` — Generate a test embed for a Steam game.
+- `!test_scraper` — Test the Bluesky feed fetcher.
 
 ## Requirements
 
 - Python 3.11+
-- Discord bot token with required permissions (see below)
-- `mise` (optional, for tool management)
-- `uv` (optional, for fast dependency management)
+- Discord Bot Token
+- [IsThereAnyDeal API Key](https://isthereanydeal.com/about/api/) (optional, for `!price` command)
+- `mise` (recommended for tool management) or `uv`
 
-## Environment Variables
+## Setup & Running
+
+This project uses [`mise`](https://mise.jdx.dev/) and [`uv`](https://github.com/astral-sh/uv) for easy environment management.
+
+### 1. Environment Variables
 
 Create a `.env` file based on `.env.template`:
 
-- **BOT_TOKEN** (required) — Your Discord bot token
-- **DATABASE_PATH** (optional) — Path to SQLite database file (default: `./data/bountyhunter.db`)
-- **POLL_INTERVAL** (optional) — Minutes between automatic checks (default: `30`)
-- **ADMIN_DISCORD_ID** (optional) — Discord user ID for admin commands and error notifications
-- **LOG_LEVEL** (optional) — Logging verbosity (default: `INFO`)
+```bash
+cp .env.template .env
+```
+
+- **BOT_TOKEN** (required) — Your Discord bot token.
+- **DATABASE_PATH** (optional) — Path to SQLite database (default: `./data/bountyhunter.db`).
+- **POLL_INTERVAL** (optional) — Minutes between checks (default: `30`).
+- **ADMIN_DISCORD_ID** (optional) — Your Discord User ID for admin commands.
+- **LOG_LEVEL** (optional) — Logging verbosity (default: `INFO`).
+- **ITAD_API_KEY** (optional) — API Key for IsThereAnyDeal integration.
+
+### 2. Installation (using `just`)
+
+If you have `just` and `mise` installed:
+
+```bash
+just setup
+```
+
+This will create a virtual environment, install dependencies, and verify everything is working.
+
+### 3. Run the Bot
+
+```bash
+just run
+```
+
+## Development
+
+- **Run Tests**: `just test`
+- **Lint Code**: `just lint`
+- **Format Code**: `just format`
+- **Check Types**: `just type-check`
+- **Full Check**: `just check` (runs lint, format-check, type-check, and tests)
+
+## Docker
+
+You can also run BountyHunter using Docker:
+
+```bash
+docker-compose up -d --build
+```
