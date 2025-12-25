@@ -255,6 +255,46 @@ class FreeGames(commands.Cog):
         except Exception as e:
             logger.error("Failed to send admin DM: %s", e)
 
+    async def _get_fallback_details(self, links: list[str], text: str, image: str | None = None) -> dict:
+        fallback_url = None
+        for link in links:
+            if any(d in link for d in ["gog.com", "amazon.com", "onstove.com", "stove.com"]):
+                fallback_url = link
+                break
+        if not fallback_url and links:
+            fallback_url = links[0]
+
+        if not fallback_url:
+            return {}
+
+        title = extract_game_title(text) or "Free Game"
+
+        # Heuristic: if title wasn't extracted and text is short, assume text is the title
+        if title == "Free Game" and text and len(text) < 50 and "http" not in text:
+            title = text
+
+        details = {
+            "name": title,
+            "store_url": fallback_url,
+            "image": image,
+        }
+
+        # Try to fetch image from ITAD if missing
+        if not details["image"] and title != "Free Game" and self.itad_manager and ITAD_API_KEY:
+            try:
+                results = await self.itad_manager.search_game(title, limit=1)
+                if results:
+                    game_info = results[0]
+                    assets = game_info.get("assets", {})
+                    banner = assets.get("banner400") or assets.get("banner300") or assets.get("boxArt")
+                    if banner:
+                        details["image"] = banner
+                        logger.info(f"Fetched image for '{title}' from ITAD")
+            except Exception as e:
+                logger.warning(f"Failed to fetch ITAD image for '{title}': {e}")
+
+        return details
+
     async def _process_feed(self, manual: bool = False):
         try:
             fetcher = BlueskyFetcher(self._http_session)
@@ -367,25 +407,9 @@ class FreeGames(commands.Cog):
             elif ps_urls and self.ps_manager:
                 details = await get_ps_details(ps_urls[0], self.ps_manager, self.store)
 
-            # Fallback: if no specific manager handled it, but we have links, try to create a generic details object
+            # Fallback: use generic details if specific manager didn't handle it
             if not details and parsed.get("links"):
-                valid_links = parsed["links"]
-                text = parsed["text"]
-                fallback_url = None
-                # Prioritize known stores
-                for link in valid_links:
-                    if any(d in link for d in ["gog.com", "amazon.com", "onstove.com", "stove.com"]):
-                        fallback_url = link
-                        break
-                if not fallback_url:
-                    fallback_url = valid_links[0]
-
-                title = extract_game_title(text) or "Free Game"
-                details = {
-                    "name": title,
-                    "store_url": fallback_url,
-                    "image": parsed.get("image"),
-                }
+                details = await self._get_fallback_details(parsed["links"], parsed["text"], image=parsed.get("image"))
 
             for _guild_id, channel_id, role_id in subs:
                 try:
@@ -594,19 +618,8 @@ class FreeGames(commands.Cog):
             "ps_urls": [],
         }
 
-        # Use the same fallback logic as in scraper
-        title = extract_game_title(text) or "Free Game"
-        # If user provided simple text that isn't a full FGF post, use it as title if extract failed
-        if title == "Free Game" and text != "Free Game Announcement":
-            # Heuristic: if text is short, assume it's the title
-            if len(text) < 50:
-                title = text
-
-        details = {
-            "name": title,
-            "store_url": url,
-            "image": None,
-        }
+        # Use centralized fallback logic (which also checks ITAD for images)
+        details = await self._get_fallback_details([url], text, image=None)
 
         try:
             embed = await self._create_game_embed(details, parsed)
@@ -747,23 +760,12 @@ class FreeGames(commands.Cog):
                         details = await get_ps_details(p_urls[0], self.ps_manager, self.store)
 
                     # Fallback logic for test_scraper
-                    if not details and valid_links:
-                        fallback_url = None
-                        for link in valid_links:
-                            if any(d in link for d in ["gog.com", "amazon.com", "onstove.com", "stove.com"]):
-                                fallback_url = link
-                                break
-                        if not fallback_url:
-                            fallback_url = list(valid_links)[0]
-
-                        title = extract_game_title(text) or "Free Game"
-                        details = {
-                            "name": title,
-                            "store_url": fallback_url,
-                            "image": None,
-                        }
+                    if not details and parsed["links"]:
+                        image = None
                         if "embed" in raw and "external" in raw["embed"] and "thumb" in raw["embed"]["external"]:
-                            details["image"] = raw["embed"]["external"]["thumb"]
+                            image = raw["embed"]["external"]["thumb"]
+
+                        details = await self._get_fallback_details(parsed["links"], parsed["text"], image=image)
 
                     # Send result
                     await ctx.send(f"\n**Post {idx}/{len(posts)}:**")

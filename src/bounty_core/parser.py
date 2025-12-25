@@ -12,8 +12,8 @@ REDDIT_REGEX = re.compile(
     r"https?://(?:www\.|old\.|new\.)?reddit\.com/r/[^/]+/comments/[^/]+|https?://redd\.it/[a-zA-Z0-9]+",
     re.IGNORECASE,
 )
-FGF_TITLE_REGEX = re.compile(r"^[\[\(].*?[\]\)]\s*(?:\(.*?\)\s*)?(.+?) is free", re.IGNORECASE)
-FGF_PSA_REGEX = re.compile(r"^\[PSA\]\s*(.+?)\s*(?:are|is) complimentary", re.IGNORECASE)
+FGF_TITLE_REGEX = re.compile(r"^[\[\(].*?[\]\)]\s*(?:\(.*?\)\s*)?(.+?) is free", re.IGNORECASE | re.MULTILINE)
+FGF_PSA_REGEX = re.compile(r"^\[PSA\]\s*(.+?)\s*(?:are|is) complimentary", re.IGNORECASE | re.MULTILINE)
 
 
 def extract_game_title(text: str) -> str | None:
