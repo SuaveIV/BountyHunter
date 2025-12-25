@@ -788,6 +788,18 @@ class FreeGames(commands.Cog):
             logger.exception("Scraper test failed: %s", e)
             await ctx.send(f"❌ Scraper test failed: {e}")
 
+    @commands.command(name="clear_cache")
+    @is_admin_dm()
+    async def clear_cache(self, ctx: commands.Context):
+        """Clear all game caches (Admin DM only)."""
+        await ctx.send("🧹 Clearing game caches...")
+        try:
+            await self.store.clear_cache()
+            await ctx.send("✅ Cache cleared. Re-run tests to fetch fresh data.")
+        except Exception as e:
+            logger.exception(f"Failed to clear cache: {e}")
+            await ctx.send(f"❌ Failed to clear cache: {e}")
+
     @commands.command(name="status")
     @is_admin_dm()
     async def status(self, ctx: commands.Context):

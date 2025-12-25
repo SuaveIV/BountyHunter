@@ -163,3 +163,11 @@ class Store:
                 (url, time.time(), json.dumps(data), 1 if permanent else 0),
             )
             await db.commit()
+
+    async def clear_cache(self):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM steam_app_cache")
+            await db.execute("DELETE FROM epic_app_cache")
+            await db.execute("DELETE FROM itch_game_cache")
+            await db.execute("DELETE FROM ps_game_cache")
+            await db.commit()
