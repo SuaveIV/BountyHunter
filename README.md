@@ -28,7 +28,12 @@ A Discord bot that automatically monitors Bluesky for free game announcements an
 
 - `!status` — Show bot uptime and last check time.
 - `!force_free` — Force a check for free games immediately.
+- `!test_embed_all` — Generate example embeds for all supported stores.
 - `!test_embed <steam_id>` — Generate a test embed for a Steam game.
+- `!test_embed_epic <slug>` — Generate a test embed for an Epic Games store slug.
+- `!test_embed_itch <url>` — Generate a test embed for an itch.io URL.
+- `!test_embed_ps <url>` — Generate a test embed for a PlayStation Store URL.
+- `!test_embed_url <url> [text]` — Generate a test embed for any generic URL (GOG, Amazon, Stove, etc.).
 - `!test_scraper` — Test the Bluesky feed fetcher.
 
 ## Requirements
