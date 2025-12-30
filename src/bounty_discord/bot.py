@@ -10,9 +10,7 @@ from bounty_core.fetcher import TARGET_ACTOR, RedditRSSFetcher
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
-from bounty_core.parser import (
-    extract_game_title,
-)
+from bounty_core.parser import extract_game_title
 from bounty_core.ps import get_game_details as get_ps_details
 from bounty_core.ps_api_manager import PSAPIManager
 from bounty_core.steam import get_game_details
