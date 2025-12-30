@@ -3,6 +3,7 @@ import logging
 import time
 
 import aiohttp
+from bounty_core.network import HEADERS
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ class SteamAPIManager:
         self.last_call = time.time()
 
         try:
-            async with self.session.get(url, params=params) as resp:
+            async with self.session.get(url, params=params, headers=HEADERS) as resp:
                 if resp.status == 429:
                     logger.warning(f"Steam API Rate Limit hit for {appid}. Backing off.")
                     await asyncio.sleep(10)

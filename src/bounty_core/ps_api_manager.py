@@ -2,6 +2,7 @@ import json
 import logging
 
 import aiohttp
+from bounty_core.network import HEADERS
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -18,15 +19,7 @@ class PSAPIManager:
     async def fetch_game_details(self, url: str) -> dict | None:
         """Fetches the page content and returns parsed game data."""
         try:
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/91.0.4472.124 Safari/537.36"
-                ),
-                "Accept-Language": "en-US,en;q=0.9",
-            }
-            async with self.session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            async with self.session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status != 200:
                     logger.warning(f"PS Store returned {resp.status} for {url}")
                     return None

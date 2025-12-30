@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 import aiohttp
+from bounty_core.network import HEADERS
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ class ItadAPIManager:
         url = f"{self.BASE_URL}/games/search/v1"
         params = {"key": self.api_key, "title": title, "results": limit}
         try:
-            async with self.session.get(url, params=params) as resp:
+            async with self.session.get(url, params=params, headers=HEADERS) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     return data
@@ -45,7 +46,7 @@ class ItadAPIManager:
         url = f"{self.BASE_URL}/games/overview/v2"
         params = {"key": self.api_key, "country": country}
         try:
-            async with self.session.post(url, params=params, json=game_ids) as resp:
+            async with self.session.post(url, params=params, json=game_ids, headers=HEADERS) as resp:
                 if resp.status == 200:
                     return await resp.json()
                 else:

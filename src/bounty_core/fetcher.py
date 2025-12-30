@@ -5,6 +5,7 @@ from typing import Any
 
 import aiohttp
 import feedparser
+from bounty_core.network import HEADERS
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
@@ -20,15 +21,16 @@ class RedditRSSFetcher:
         self.session = session
 
     async def fetch_latest(self, limit: int = 10) -> list[dict[str, Any]]:
-        headers = {
-            "User-Agent": "BountyHunter/1.0 (Discord Bot; +https://github.com/yourusername/BountyHunter)"
-        }
+        # Merge our specific User-Agent with the standard headers if we want to identify the bot
+        # But generally, for scraping, looking like a browser is safer.
+        # We'll stick to the standard browser headers for now to avoid blocks.
+        request_headers = HEADERS.copy()
 
         for attempt in range(MAX_RETRIES):
             try:
                 # We fetch the content as text first, then pass to feedparser
                 # feedparser can fetch URL directly, but using aiohttp keeps it async
-                async with self.session.get(FEED_URL, headers=headers) as resp:
+                async with self.session.get(FEED_URL, headers=request_headers) as resp:
                     if resp.status == 200:
                         content = await resp.text()
                         # feedparser.parse can take a string
