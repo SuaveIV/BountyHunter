@@ -3,8 +3,9 @@ import logging
 import re
 
 import aiohttp
-from bounty_core.network import HEADERS
 from bs4 import BeautifulSoup
+
+from bounty_core.network import HEADERS
 
 logger = logging.getLogger(__name__)
 

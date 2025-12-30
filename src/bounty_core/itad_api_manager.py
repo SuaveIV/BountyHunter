@@ -2,6 +2,7 @@ import logging
 from typing import Any
 
 import aiohttp
+
 from bounty_core.network import HEADERS
 
 logger = logging.getLogger(__name__)
