@@ -10,6 +10,7 @@ dependencies = [
     "aiosqlite",
     "python-dotenv",
     "beautifulsoup4",
+    "feedparser>=6.0.12",
 ]
 
 [project.optional-dependencies]

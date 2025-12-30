@@ -6,26 +6,17 @@ from discord.ext import commands, tasks
 
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.epic_api_manager import EpicAPIManager
-from bounty_core.fetcher import TARGET_ACTOR, BlueskyFetcher
+from bounty_core.fetcher import TARGET_ACTOR, RedditRSSFetcher
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
-from bounty_core.parser import (
-    extract_epic_slugs,
-    extract_game_title,
-    extract_itch_urls,
-    extract_links,
-    extract_links_from_reddit_json,
-    extract_ps_urls,
-    extract_steam_ids,
-    is_reddit_link,
-    is_safe_link,
-)
+from bounty_core.parser import extract_game_title
 from bounty_core.ps import get_game_details as get_ps_details
 from bounty_core.ps_api_manager import PSAPIManager
 from bounty_core.steam import get_game_details
 from bounty_core.steam_api_manager import SteamAPIManager
 from bounty_core.store import Store
+from bounty_discord.modules.sector_scanner import SectorScanner
 
 from .config import ADMIN_DISCORD_ID, DATABASE_PATH, ITAD_API_KEY, POLL_INTERVAL
 from .logging_config import get_logger
@@ -63,6 +54,7 @@ class FreeGames(commands.Cog):
         self.itch_manager = ItchAPIManager(session=self._http_session)
         self.ps_manager = PSAPIManager(session=self._http_session)
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
+        self.scanner = SectorScanner(RedditRSSFetcher(self._http_session), self.store)
 
         if not ADMIN_DISCORD_ID:
             logger.warning("ADMIN_DISCORD_ID is not set. Admin commands and error DMs will be disabled.")
@@ -297,83 +289,7 @@ class FreeGames(commands.Cog):
 
     async def _process_feed(self, manual: bool = False):
         try:
-            fetcher = BlueskyFetcher(self._http_session)
-            posts = await fetcher.fetch_latest()
-            new_announcements = []
-            for raw in posts:
-                uri = raw.get("uri")
-                if not uri:
-                    continue
-                if await self.store.is_post_seen(uri):
-                    continue
-
-                text = raw.get("record", {}).get("text", "")
-                links = extract_links(raw)
-                valid_links = set()
-                source_links = set()
-
-                for link in links:
-                    if not is_safe_link(link):
-                        continue
-
-                    if is_reddit_link(link):
-                        source_links.add(link)
-                        try:
-                            # If it's a shortlink, resolve it first
-                            target_url = link
-                            if "redd.it" in link:
-                                async with self._http_session.head(link, allow_redirects=True) as resp:
-                                    target_url = str(resp.url)
-
-                            # Now append .json (handle potential query params or trailing slash)
-                            # Simple approach: remove query params, ensure no slash, add .json
-                            # But reddit URLs are usually clean.
-                            if "?" in target_url:
-                                target_url = target_url.split("?")[0]
-
-                            json_url = target_url.rstrip("/") + ".json"
-
-                            logger.info(f"Expanding reddit link: {link} -> {json_url}")
-
-                            headers = {"User-Agent": "BountyHunter/1.0"}
-                            async with self._http_session.get(json_url, headers=headers) as resp:
-                                if resp.status == 200:
-                                    data = await resp.json()
-                                    reddit_links = extract_links_from_reddit_json(data)
-                                    logger.info(f"Found {len(reddit_links)} links in reddit post")
-                                    for r_link in reddit_links:
-                                        if is_safe_link(r_link):
-                                            valid_links.add(r_link)
-                                else:
-                                    logger.warning(f"Reddit expansion failed {resp.status} for {json_url}")
-                        except Exception as e:
-                            logger.warning(f"Failed to expand reddit link {link}: {e}")
-                    else:
-                        valid_links.add(link)
-
-                if valid_links:
-                    # Search for IDs in both post text and the links themselves
-                    search_blob = text + " " + " ".join(valid_links)
-                    steam_ids = extract_steam_ids(search_blob)
-                    epic_slugs = extract_epic_slugs(search_blob)
-                    itch_urls = extract_itch_urls(search_blob)
-                    ps_urls = extract_ps_urls(search_blob)
-
-                    parsed = {
-                        "uri": uri,
-                        "text": text,
-                        "links": list(valid_links),
-                        "source_links": list(source_links),
-                        "steam_app_ids": list(steam_ids),
-                        "epic_slugs": list(epic_slugs),
-                        "itch_urls": list(itch_urls),
-                        "ps_urls": list(ps_urls),
-                    }
-                    if "embed" in raw and "external" in raw["embed"] and "thumb" in raw["embed"]["external"]:
-                        parsed["image"] = raw["embed"]["external"]["thumb"]
-
-                    new_announcements.append((uri, parsed))
-                    await self.store.mark_post_seen(uri)
+            new_announcements = await self.scanner.scan()
 
             if not new_announcements and manual:
                 logger.info("Manual check found no new items")
@@ -675,12 +591,9 @@ class FreeGames(commands.Cog):
         """Test the scraper feed (Admin DM only)."""
         await ctx.send(f"🔍 Testing scraper (fetching last {limit} posts)...")
 
-        if not self._http_session:
-            self._http_session = aiohttp.ClientSession()
-
         try:
-            fetcher = BlueskyFetcher(self._http_session)
-            posts = await fetcher.fetch_latest(limit=limit)
+            # Use scanner with ignore_seen=True to preview posts without marking them
+            posts = await self.scanner.scan(limit=limit, ignore_seen=True)
 
             if not posts:
                 await ctx.send("❌ No posts found.")
@@ -688,101 +601,43 @@ class FreeGames(commands.Cog):
 
             await ctx.send(f"✅ Found {len(posts)} posts. Processing...")
 
-            for idx, raw in enumerate(posts, 1):
-                uri = raw.get("uri")
-                text = raw.get("record", {}).get("text", "")
+            for idx, (_uri, parsed) in enumerate(posts, 1):
+                # Fetch details
+                details = None
+                s_ids = parsed.get("steam_app_ids", [])
+                e_slugs = parsed.get("epic_slugs", [])
+                i_urls = parsed.get("itch_urls", [])
+                p_urls = parsed.get("ps_urls", [])
 
-                links = extract_links(raw)
-                valid_links = set()
-                source_links = set()
+                if s_ids and self.steam_manager:
+                    details = await get_game_details(s_ids[0], self.steam_manager, self.store)
+                elif e_slugs and self.epic_manager:
+                    details = await get_epic_details(e_slugs[0], self.epic_manager, self.store)
+                elif i_urls and self.itch_manager:
+                    details = await get_itch_details(i_urls[0], self.itch_manager, self.store)
+                elif p_urls and self.ps_manager:
+                    details = await get_ps_details(p_urls[0], self.ps_manager, self.store)
 
-                for link in links:
-                    if not is_safe_link(link):
-                        continue
+                # Fallback logic for test_scraper
+                if not details and parsed.get("links"):
+                    details = await self._get_fallback_details(
+                        parsed["links"], parsed["text"], image=parsed.get("image")
+                    )
 
-                    if is_reddit_link(link):
-                        source_links.add(link)
-                        try:
-                            target_url = link
-                            if "redd.it" in link:
-                                async with self._http_session.head(link, allow_redirects=True) as resp:
-                                    target_url = str(resp.url)
+                # Send result
+                await ctx.send(f"\n**Post {idx}/{len(posts)}:**")
 
-                            if "?" in target_url:
-                                target_url = target_url.split("?")[0]
-                            json_url = target_url.rstrip("/") + ".json"
-
-                            headers = {"User-Agent": "BountyHunter/1.0"}
-                            async with self._http_session.get(json_url, headers=headers) as resp:
-                                if resp.status == 200:
-                                    data = await resp.json()
-                                    reddit_links = extract_links_from_reddit_json(data)
-                                    for r_link in reddit_links:
-                                        if is_safe_link(r_link):
-                                            valid_links.add(r_link)
-                        except Exception as e:
-                            logger.warning(f"Failed to expand reddit link {link}: {e}")
-                    else:
-                        valid_links.add(link)
-
-                if valid_links:
-                    search_blob = text + " " + " ".join(valid_links)
-                    steam_ids = extract_steam_ids(search_blob)
-                    epic_slugs = extract_epic_slugs(search_blob)
-                    itch_urls = extract_itch_urls(search_blob)
-                    ps_urls = extract_ps_urls(search_blob)
-
-                    parsed = {
-                        "uri": uri,
-                        "text": text,
-                        "links": list(valid_links),
-                        "source_links": list(source_links),
-                        "steam_app_ids": list(steam_ids),
-                        "epic_slugs": list(epic_slugs),
-                        "itch_urls": list(itch_urls),
-                        "ps_urls": list(ps_urls),
-                    }
-
-                    # Fetch details
-                    details = None
-                    s_ids = list(steam_ids)
-                    e_slugs = list(epic_slugs)
-                    i_urls = list(itch_urls)
-                    p_urls = list(ps_urls)
-
-                    if s_ids and self.steam_manager:
-                        details = await get_game_details(s_ids[0], self.steam_manager, self.store)
-                    elif e_slugs and self.epic_manager:
-                        details = await get_epic_details(e_slugs[0], self.epic_manager, self.store)
-                    elif i_urls and self.itch_manager:
-                        details = await get_itch_details(i_urls[0], self.itch_manager, self.store)
-                    elif p_urls and self.ps_manager:
-                        details = await get_ps_details(p_urls[0], self.ps_manager, self.store)
-
-                    # Fallback logic for test_scraper
-                    if not details and parsed["links"]:
-                        image = None
-                        if "embed" in raw and "external" in raw["embed"] and "thumb" in raw["embed"]["external"]:
-                            image = raw["embed"]["external"]["thumb"]
-
-                        details = await self._get_fallback_details(parsed["links"], parsed["text"], image=image)
-
-                    # Send result
-                    await ctx.send(f"\n**Post {idx}/{len(posts)}:**")
-
-                    if details and "Unknown" not in details.get("name", "Unknown"):
-                        try:
-                            embed = await self._create_game_embed(details, parsed)
-                            await ctx.send(embed=embed)
-                        except Exception as e:
-                            logger.exception(f"Failed to create embed: {e}")
-                            fallback = await self._create_fallback_message(parsed, None)
-                            await ctx.send(fallback)
-                    else:
+                if details and "Unknown" not in details.get("name", "Unknown"):
+                    try:
+                        embed = await self._create_game_embed(details, parsed)
+                        await ctx.send(embed=embed)
+                    except Exception as e:
+                        logger.exception(f"Failed to create embed: {e}")
                         fallback = await self._create_fallback_message(parsed, None)
                         await ctx.send(fallback)
                 else:
-                    await ctx.send(f"**Post {idx}/{len(posts)}:** No valid game links found")
+                    fallback = await self._create_fallback_message(parsed, None)
+                    await ctx.send(fallback)
 
             await ctx.send("✅ Scraper test complete.")
 

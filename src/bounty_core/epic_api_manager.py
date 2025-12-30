@@ -5,16 +5,9 @@ from typing import Any
 import aiohttp
 from bs4 import BeautifulSoup
 
-logger = logging.getLogger(__name__)
+from bounty_core.network import HEADERS
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/114.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "en-US,en;q=0.9",
-}
+logger = logging.getLogger(__name__)
 
 
 class EpicAPIManager:

@@ -4,11 +4,10 @@ import pytest
 
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.epic_api_manager import EpicAPIManager
-from bounty_core.fetcher import BlueskyFetcher
+from bounty_core.fetcher import RedditRSSFetcher
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
-from bounty_core.parser import extract_links
 from bounty_core.steam import get_game_details as get_steam_details
 from bounty_core.steam_api_manager import SteamAPIManager
 
@@ -72,18 +71,15 @@ async def test_itad_integration(session):
 
 @pytest.mark.asyncio
 async def test_scraper_feed(session):
-    """Test fetching and parsing the Bluesky feed."""
-    fetcher = BlueskyFetcher(session)
-    posts = await fetcher.fetch_latest()
+    """Test fetching and parsing the Reddit RSS feed."""
+    fetcher = RedditRSSFetcher(session)
+    posts = await fetcher.fetch_latest(limit=5)
 
     assert isinstance(posts, list)
     # Note: Feed might be empty depending on the actor/filter
 
     if posts:
         post = posts[0]
-        assert "uri" in post
-        assert "record" in post
-
-        # Verify parser works on real data
-        links = extract_links(post)
-        assert isinstance(links, set)
+        assert "id" in post
+        assert "title" in post
+        assert "url" in post

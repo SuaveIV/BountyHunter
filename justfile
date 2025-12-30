@@ -9,35 +9,37 @@ default:
 # Complete setup: create venv, generate lockfile, and install dependencies
 setup:
     @echo "🚀 Setting up BountyHunter development environment..."
-    just create-venv
     just lock
     just install-deps
+    just export-requirements
     just verify-setup
     @echo "✅ Setup complete! Run 'just run' to start the bot."
 
-# Create virtual environment using uv
-create-venv:
-    @echo "📦 Creating virtual environment with uv..."
-    mise exec -- uv venv --clear
-    @echo "✅ Virtual environment created at .venv/"
-
-# Install all dependencies in editable mode
+# Install all dependencies (runtime + dev) using uv sync
 install-deps:
-    @echo "📥 Installing dependencies from lockfile and project in editable mode..."
-    mise exec -- uv pip install -r requirements.txt -e .
-    @echo "✅ Dependencies installed."
+    @echo "📥 Syncing dependencies with uv..."
+    mise exec -- uv sync --extra dev
+    @echo "✅ Dependencies synced."
 
-# Generate a new lockfile from pyproject.toml
+# Generate/Update uv.lock
 lock:
-    @echo "🔒 Generating lockfile from pyproject.toml..."
-    mise exec -- uv pip compile pyproject.toml --extra dev -o requirements.txt
-    @echo "✅ requirements.txt lockfile updated."
+    @echo "🔒 Updating uv.lock..."
+    mise exec -- uv lock
+    @echo "✅ uv.lock updated."
 
-# Upgrade all dependencies in the lockfile to the latest safe versions
+# Export requirements.txt for Docker
+export-requirements:
+    @echo "📄 Exporting requirements.txt from lockfile..."
+    mise exec -- uv export --format requirements-txt --output-file requirements.txt
+    @echo "✅ requirements.txt exported."
+
+# Upgrade all dependencies
 update-deps:
-    @echo "⬆️  Upgrading dependencies to their latest compatible versions..."
-    mise exec -- uv pip compile pyproject.toml --extra dev --upgrade -o requirements.txt
-    @echo "✅ Lockfile updated. Run 'just install-deps' to apply the changes."
+    @echo "⬆️  Upgrading dependencies..."
+    mise exec -- uv lock --upgrade
+    just install-deps
+    just export-requirements
+    @echo "✅ Dependencies upgraded and requirements.txt updated."
 
 # Verify installation is working
 verify-setup:
