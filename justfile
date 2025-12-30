@@ -63,7 +63,7 @@ run:
 # Inspect database (requires sqlite3 or similar tool, or just checks file existence)
 check-db:
     @echo "📊 Checking database..."
-    @if [ -f "data/free_games.db" ]; then echo "✅ Database exists at data/free_games.db"; else echo "⚠️  Database not found (will be created on first run)"; fi
+    @if [ -f "data/bountyhunter.db" ]; then echo "✅ Database exists at data/bountyhunter.db"; else echo "⚠️  Database not found (will be created on first run)"; fi
 
 # === LINTING AND TESTING ===
 
