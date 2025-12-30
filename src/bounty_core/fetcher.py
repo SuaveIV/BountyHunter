@@ -78,7 +78,12 @@ class RedditRSSFetcher:
             # Extract External Link
             # r/FreeGameFindings usually has a link with text "[link]"
             external_link = None
-            link_tag = soup.find("a", string="[link]")
+            link_tag = None
+            for a in soup.find_all("a"):
+                if a.string == "[link]":
+                    link_tag = a
+                    break
+
             if link_tag and link_tag.has_attr("href"):
                 external_link = link_tag["href"]
             else:

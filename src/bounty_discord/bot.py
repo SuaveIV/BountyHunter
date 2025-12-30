@@ -23,7 +23,6 @@ from bounty_core.ps_api_manager import PSAPIManager
 from bounty_core.steam import get_game_details
 from bounty_core.steam_api_manager import SteamAPIManager
 from bounty_core.store import Store
-from bs4 import BeautifulSoup
 
 from .config import ADMIN_DISCORD_ID, DATABASE_PATH, ITAD_API_KEY, POLL_INTERVAL
 from .logging_config import get_logger
@@ -708,7 +707,9 @@ class FreeGames(commands.Cog):
 
                     # Fallback logic for test_scraper
                     if not details and parsed["links"]:
-                        details = await self._get_fallback_details(parsed["links"], parsed["text"], image=parsed.get("image"))
+                        details = await self._get_fallback_details(
+                            parsed["links"], parsed["text"], image=parsed.get("image")
+                        )
 
                     # Send result
                     await ctx.send(f"\n**Post {idx}/{len(posts)}:**")
