@@ -598,12 +598,9 @@ class FreeGames(commands.Cog):
         """Test the scraper feed (Admin DM only)."""
         await ctx.send(f"🔍 Testing scraper (fetching last {limit} posts)...")
 
-        if not self._http_session:
-            self._http_session = aiohttp.ClientSession()
-
         try:
-            fetcher = RedditRSSFetcher(self._http_session)
-            posts = await fetcher.fetch_latest(limit=limit)
+            # Use scanner with ignore_seen=True to preview posts without marking them
+            posts = await self.scanner.scan(limit=limit, ignore_seen=True)
 
             if not posts:
                 await ctx.send("❌ No posts found.")
@@ -611,79 +608,43 @@ class FreeGames(commands.Cog):
 
             await ctx.send(f"✅ Found {len(posts)} posts. Processing...")
 
-            for idx, post in enumerate(posts, 1):
-                uri = post.get("id")
-                text = post.get("title", "")
-                reddit_url = post.get("url", "")
-                external_url = post.get("external_url", "")
-                thumbnail = post.get("thumbnail")
+            for idx, (uri, parsed) in enumerate(posts, 1):
+                # Fetch details
+                details = None
+                s_ids = parsed.get("steam_app_ids", [])
+                e_slugs = parsed.get("epic_slugs", [])
+                i_urls = parsed.get("itch_urls", [])
+                p_urls = parsed.get("ps_urls", [])
 
-                valid_links = set()
-                source_links = set()
+                if s_ids and self.steam_manager:
+                    details = await get_game_details(s_ids[0], self.steam_manager, self.store)
+                elif e_slugs and self.epic_manager:
+                    details = await get_epic_details(e_slugs[0], self.epic_manager, self.store)
+                elif i_urls and self.itch_manager:
+                    details = await get_itch_details(i_urls[0], self.itch_manager, self.store)
+                elif p_urls and self.ps_manager:
+                    details = await get_ps_details(p_urls[0], self.ps_manager, self.store)
 
-                if is_safe_link(external_url):
-                    valid_links.add(external_url)
+                # Fallback logic for test_scraper
+                if not details and parsed.get("links"):
+                    details = await self._get_fallback_details(
+                        parsed["links"], parsed["text"], image=parsed.get("image")
+                    )
 
-                if is_safe_link(reddit_url):
-                    source_links.add(reddit_url)
+                # Send result
+                await ctx.send(f"\n**Post {idx}/{len(posts)}:**")
 
-                if valid_links:
-                    search_blob = text + " " + " ".join(valid_links)
-                    steam_ids = extract_steam_ids(search_blob)
-                    epic_slugs = extract_epic_slugs(search_blob)
-                    itch_urls = extract_itch_urls(search_blob)
-                    ps_urls = extract_ps_urls(search_blob)
-
-                    parsed = {
-                        "uri": uri,
-                        "text": text,
-                        "links": list(valid_links),
-                        "source_links": list(source_links),
-                        "steam_app_ids": list(steam_ids),
-                        "epic_slugs": list(epic_slugs),
-                        "itch_urls": list(itch_urls),
-                        "ps_urls": list(ps_urls),
-                        "image": thumbnail,
-                    }
-
-                    # Fetch details
-                    details = None
-                    s_ids = list(steam_ids)
-                    e_slugs = list(epic_slugs)
-                    i_urls = list(itch_urls)
-                    p_urls = list(ps_urls)
-
-                    if s_ids and self.steam_manager:
-                        details = await get_game_details(s_ids[0], self.steam_manager, self.store)
-                    elif e_slugs and self.epic_manager:
-                        details = await get_epic_details(e_slugs[0], self.epic_manager, self.store)
-                    elif i_urls and self.itch_manager:
-                        details = await get_itch_details(i_urls[0], self.itch_manager, self.store)
-                    elif p_urls and self.ps_manager:
-                        details = await get_ps_details(p_urls[0], self.ps_manager, self.store)
-
-                    # Fallback logic for test_scraper
-                    if not details and parsed["links"]:
-                        details = await self._get_fallback_details(
-                            parsed["links"], parsed["text"], image=parsed.get("image")
-                        )
-
-                    # Send result
-                    await ctx.send(f"\n**Post {idx}/{len(posts)}:**")
-
-                    if details and "Unknown" not in details.get("name", "Unknown"):
-                        try:
-                            embed = await self._create_game_embed(details, parsed)
-                            await ctx.send(embed=embed)
-                        except Exception as e:
-                            logger.exception(f"Failed to create embed: {e}")
-                            fallback = await self._create_fallback_message(parsed, None)
-                            await ctx.send(fallback)
-                    else:
+                if details and "Unknown" not in details.get("name", "Unknown"):
+                    try:
+                        embed = await self._create_game_embed(details, parsed)
+                        await ctx.send(embed=embed)
+                    except Exception as e:
+                        logger.exception(f"Failed to create embed: {e}")
                         fallback = await self._create_fallback_message(parsed, None)
                         await ctx.send(fallback)
                 else:
-                    await ctx.send(f"**Post {idx}/{len(posts)}:** No valid game links found")
+                    fallback = await self._create_fallback_message(parsed, None)
+                    await ctx.send(fallback)
 
             await ctx.send("✅ Scraper test complete.")
 
