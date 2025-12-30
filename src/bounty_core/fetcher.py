@@ -46,9 +46,7 @@ class RedditRSSFetcher:
 
                     if resp.status == 429 or 500 <= resp.status < 600:
                         delay = BASE_DELAY * (2**attempt) + random.uniform(0, 1)
-                        logger.warning(
-                            f"Reddit RSS fetch failed ({resp.status}). Retrying in {delay:.2f}s..."
-                        )
+                        logger.warning(f"Reddit RSS fetch failed ({resp.status}). Retrying in {delay:.2f}s...")
                         await asyncio.sleep(delay)
                         continue
 

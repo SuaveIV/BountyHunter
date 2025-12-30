@@ -32,12 +32,12 @@ class SectorScanner:
         try:
             posts = await self.fetcher.fetch_latest(limit=limit)
             new_announcements = []
-            
+
             for post in posts:
                 uri = post.get("id")
                 if not uri:
                     continue
-                
+
                 # Check if we've already processed this bounty
                 if not ignore_seen and await self.store.is_post_seen(uri):
                     continue
@@ -73,7 +73,7 @@ class SectorScanner:
                         "epic_slugs": list(epic_slugs),
                         "itch_urls": list(itch_urls),
                         "ps_urls": list(ps_urls),
-                        "image": thumbnail
+                        "image": thumbnail,
                     }
 
                     new_announcements.append((uri, parsed))
