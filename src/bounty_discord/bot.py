@@ -11,12 +11,7 @@ from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
 from bounty_core.parser import (
-    extract_epic_slugs,
     extract_game_title,
-    extract_itch_urls,
-    extract_ps_urls,
-    extract_steam_ids,
-    is_safe_link,
 )
 from bounty_core.ps import get_game_details as get_ps_details
 from bounty_core.ps_api_manager import PSAPIManager
@@ -608,7 +603,7 @@ class FreeGames(commands.Cog):
 
             await ctx.send(f"✅ Found {len(posts)} posts. Processing...")
 
-            for idx, (uri, parsed) in enumerate(posts, 1):
+            for idx, (_uri, parsed) in enumerate(posts, 1):
                 # Fetch details
                 details = None
                 s_ids = parsed.get("steam_app_ids", [])
