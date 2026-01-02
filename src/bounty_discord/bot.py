@@ -18,7 +18,7 @@ from bounty_core.steam_api_manager import SteamAPIManager
 from bounty_core.store import Store
 from bounty_discord.modules.sector_scanner import SectorScanner
 
-from .config import ADMIN_DISCORD_ID, DATABASE_PATH, ITAD_API_KEY, POLL_INTERVAL
+from .config import ADMIN_DISCORD_ID, DATABASE_PATH, ITAD_API_KEY
 from .logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -46,7 +46,6 @@ class FreeGames(commands.Cog):
         self.bot = bot
         self.store = Store(DATABASE_PATH)
         self._http_session = aiohttp.ClientSession()
-        self._first_run = True
         self.start_time = datetime.datetime.now(datetime.UTC)
         self.last_check_time = None
         self.steam_manager = SteamAPIManager(session=self._http_session)
@@ -370,14 +369,8 @@ class FreeGames(commands.Cog):
                     logger.exception(f"Failed to send announcement to channel {channel_id}: {e}")
 
     # Scheduled task
-    @tasks.loop(minutes=POLL_INTERVAL)
+    @tasks.loop(time=[datetime.time(hour=h, minute=m, tzinfo=datetime.UTC) for h in range(24) for m in (0, 30)])
     async def scheduled_check(self):
-        # skip first run to avoid spam when enabling if configured to do so
-        # But wait, tasks.loop runs immediately by default unless before_loop used
-        # We handle first run manually
-        if self._first_run:
-            self._first_run = False
-            return
         await self._process_feed(manual=False)
 
     @scheduled_check.before_loop
