@@ -5,12 +5,13 @@ from discord.ext import commands
 
 from bounty_discord.bot import FreeGames
 from bounty_discord.config import BOT_TOKEN
-from bounty_discord.logging_config import get_logger
+from bounty_discord.logging_config import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
 
 async def main():
+    setup_logging()
     if not BOT_TOKEN:
         logger.error("BOT_TOKEN not set")
         return
