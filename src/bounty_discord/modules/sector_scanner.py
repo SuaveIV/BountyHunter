@@ -3,6 +3,7 @@ from typing import Any
 
 from bounty_core.fetcher import RedditRSSFetcher
 from bounty_core.parser import (
+    determine_content_type,
     extract_epic_slugs,
     extract_itch_urls,
     extract_ps_urls,
@@ -43,6 +44,15 @@ class SectorScanner:
                     continue
 
                 text = post.get("title", "")
+                
+                # Determine content type and filter INFO posts
+                content_type = determine_content_type(text)
+                if content_type == "INFO":
+                    logger.debug(f"Skipping INFO post: {text}")
+                    if not ignore_seen:
+                        await self.store.mark_post_seen(uri)
+                    continue
+
                 reddit_url = post.get("url", "")
                 external_url = post.get("external_url", "")
                 thumbnail = post.get("thumbnail")
@@ -67,6 +77,7 @@ class SectorScanner:
                     parsed = {
                         "uri": uri,
                         "text": text,
+                        "type": content_type,
                         "links": list(valid_links),
                         "source_links": list(source_links),
                         "steam_app_ids": list(steam_ids),
