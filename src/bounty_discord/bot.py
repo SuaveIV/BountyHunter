@@ -56,6 +56,9 @@ class FreeGames(commands.Cog):
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
         self.scanner = SectorScanner(RedditRSSFetcher(self._http_session), self.store)
 
+        # Start the scheduled check loop
+        self.scheduled_check.start()
+
         if not ADMIN_DISCORD_ID:
             logger.warning("ADMIN_DISCORD_ID is not set. Admin commands and error DMs will be disabled.")
 
