@@ -302,8 +302,10 @@ class FreeGames(commands.Cog):
         try:
             new_announcements = await self.scanner.scan()
 
-            if not new_announcements and manual:
-                logger.info("Manual check found no new items")
+            if not new_announcements:
+                logger.info(f"Check found no new items (Manual: {manual})")
+            else:
+                logger.info(f"Check found {len(new_announcements)} new items (Manual: {manual})")
             await self._announce_new(new_announcements, manual=manual)
             self.last_check_time = datetime.datetime.now(datetime.UTC)
         except Exception as e:
