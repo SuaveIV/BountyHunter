@@ -10,7 +10,7 @@ from bounty_core.fetcher import TARGET_ACTOR, RedditRSSFetcher
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
-from bounty_core.parser import extract_game_title
+from bounty_core.parser import determine_content_type, extract_game_title
 from bounty_core.ps import get_game_details as get_ps_details
 from bounty_core.ps_api_manager import PSAPIManager
 from bounty_core.steam import get_game_details
@@ -56,6 +56,9 @@ class FreeGames(commands.Cog):
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
         self.scanner = SectorScanner(RedditRSSFetcher(self._http_session), self.store)
 
+        # Start the scheduled check loop
+        self.scheduled_check.start()
+
         if not ADMIN_DISCORD_ID:
             logger.warning("ADMIN_DISCORD_ID is not set. Admin commands and error DMs will be disabled.")
 
@@ -89,8 +92,17 @@ class FreeGames(commands.Cog):
         is_amazon = "amazon.com" in store_url or "gaming.amazon.com" in store_url
         is_stove = "stove.com" in store_url or "onstove.com" in store_url
 
+        # Determine prefix based on parsed type
+        post_type = parsed.get("type", "UNKNOWN")
+        if post_type == "GAME":
+            title_prefix = "FREE GAME"
+        elif post_type == "ITEM":
+            title_prefix = "FREE ITEM"
+        else:
+            title_prefix = "FREE"
+
         embed = discord.Embed()
-        embed.title = f"FREE: {details.get('name', 'Unknown Game')}"
+        embed.title = f"{title_prefix}: {details.get('name', 'Unknown Game')}"
         embed.url = store_url
 
         # Footer keeps BountyHunter branding but dynamic TARGET_ACTOR
@@ -400,6 +412,7 @@ class FreeGames(commands.Cog):
         # Create mock parsed data for testing
         parsed = {
             "text": "🎮 Check out this game on Steam! Great deal right now.",
+            "type": "GAME",
             "links": [f"https://store.steampowered.com/app/{steam_id}/"],
             "source_links": ["https://reddit.com/r/GameDeals/comments/example"],
             "steam_app_ids": [steam_id],
@@ -433,6 +446,7 @@ class FreeGames(commands.Cog):
         # Create mock parsed data for testing
         parsed = {
             "text": "🎮 Free game available on Epic Games Store!",
+            "type": "GAME",
             "links": [f"https://store.epicgames.com/p/{slug}"],
             "source_links": [],
             "steam_app_ids": [],
@@ -466,6 +480,7 @@ class FreeGames(commands.Cog):
         # Create mock parsed data for testing
         parsed = {
             "text": "🎮 Free game on itch.io!",
+            "type": "GAME",
             "links": [url],
             "source_links": [],
             "steam_app_ids": [],
@@ -499,6 +514,7 @@ class FreeGames(commands.Cog):
         # Create mock parsed data for testing
         parsed = {
             "text": "🎮 Free game on PlayStation Store!",
+            "type": "GAME",
             "links": [url],
             "source_links": [],
             "steam_app_ids": [],
@@ -526,6 +542,7 @@ class FreeGames(commands.Cog):
         # Create mock parsed data
         parsed = {
             "text": text,
+            "type": determine_content_type(text),
             "links": [url],
             "source_links": [],
             "steam_app_ids": [],

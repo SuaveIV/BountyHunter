@@ -1,7 +1,15 @@
 import re
 
 # Heuristics ported from FamilyBot
-DENY_DOMAINS = {"givee.club", "gleam.io", "indiegala.com", "rafflecopter.com", "woobox.com"}
+DENY_DOMAINS = {
+    "givee.club",
+    "gleam.io",
+    "indiegala.com",
+    "rafflecopter.com",
+    "woobox.com",
+    "stove.com",
+    "onstove.com",
+}
 STEAM_APP_REGEX = re.compile(r"store\.steampowered\.com/app/(\d+)")
 ITCH_GAME_REGEX = re.compile(r"(https?://[a-zA-Z0-9-]+\.itch\.io/[a-zA-Z0-9-]+)")
 PS_GAME_REGEX = re.compile(r"(https?://store\.playstation\.com/(?:[^/]+/)?product/([a-zA-Z0-9_-]+))")
@@ -9,6 +17,26 @@ EPIC_GAME_REGEX = re.compile(r"store\.epicgames\.com/(?:[^/]+/)?p/([^/\s?]+)")
 URL_REGEX = re.compile(r"(https?://[^\s]+)")
 FGF_TITLE_REGEX = re.compile(r"^[\[\(].*?[\]\)]\s*(?:\(.*?\)\s*)?(.+?) is free", re.IGNORECASE | re.MULTILINE)
 FGF_PSA_REGEX = re.compile(r"^\[PSA\]\s*(.+?)\s*(?:are|is) complimentary", re.IGNORECASE | re.MULTILINE)
+FGF_TYPE_REGEX = re.compile(r"\[.*?\]\s*\((.*?)\)", re.IGNORECASE)
+PSA_CHECK_REGEX = re.compile(r"^\[PSA\]", re.IGNORECASE)
+
+
+def determine_content_type(text: str) -> str:
+    """
+    Determines the type of content based on the title.
+    Returns: 'GAME', 'ITEM', 'INFO', or 'UNKNOWN'
+    """
+    if PSA_CHECK_REGEX.search(text):
+        return "INFO"
+
+    match = FGF_TYPE_REGEX.search(text)
+    if match:
+        tag = match.group(1).lower()
+        if tag == "game":
+            return "GAME"
+        return "ITEM"
+
+    return "UNKNOWN"
 
 
 def extract_game_title(text: str) -> str | None:
