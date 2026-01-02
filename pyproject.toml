@@ -11,6 +11,7 @@ dependencies = [
     "python-dotenv",
     "beautifulsoup4",
     "feedparser>=6.0.12",
+    "colorama>=0.4.6",
 ]
 
 [project.optional-dependencies]
