@@ -44,7 +44,7 @@ class SectorScanner:
                     continue
 
                 text = post.get("title", "")
-                
+
                 # Determine content type and filter INFO posts
                 content_type = determine_content_type(text)
                 if content_type == "INFO":
