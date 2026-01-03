@@ -1,10 +1,9 @@
 import asyncio
 
 import discord
-from discord.ext import commands
 
-from bounty_discord.bot import FreeGames
 from bounty_discord.config import BOT_TOKEN
+from bounty_discord.gunship import Gunship
 from bounty_discord.logging_config import get_logger, setup_logging
 
 logger = get_logger(__name__)
@@ -19,7 +18,8 @@ async def main():
     intents = discord.Intents.default()
     intents.message_content = True  # Required for commands
 
-    bot = commands.Bot(command_prefix="!", intents=intents)
+    # Initialize the Gunship (Bot)
+    bot = Gunship(command_prefix="!", intents=intents)
 
     @bot.event
     async def on_ready():
@@ -29,7 +29,6 @@ async def main():
         logger.info("Bot is ready to process prefix commands.")
 
     async with bot:
-        await bot.add_cog(FreeGames(bot))
         await bot.start(BOT_TOKEN)
 
 

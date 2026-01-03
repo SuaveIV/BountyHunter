@@ -6,7 +6,35 @@ from logging.handlers import RotatingFileHandler
 from colorama import Fore, Style
 from colorama import init as colorama_init
 
-from .config import BOT_TOKEN, ITAD_API_KEY, LOG_LEVEL
+from .config import ADMIN_DISCORD_ID, BOT_TOKEN, ITAD_API_KEY, LOG_LEVEL
+
+
+class DiscordLoggingHandler(logging.Handler):
+    """Custom logging handler to send Critical errors to the Admin via DM."""
+
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+        self.setLevel(logging.CRITICAL)
+
+    def emit(self, record):
+        try:
+            log_entry = self.format(record)
+            self.bot.loop.create_task(self.send_dm(log_entry))
+        except Exception:
+            pass
+
+    async def send_dm(self, message):
+        if not ADMIN_DISCORD_ID:
+            return
+        try:
+            user = await self.bot.fetch_user(int(ADMIN_DISCORD_ID))
+            if user:
+                if len(message) > 1900:
+                    message = message[:1900] + "..."
+                await user.send(f"🚨 **CRITICAL ERROR** 🚨\n```\n{message}\n```")
+        except Exception:
+            pass
 
 
 class SensitiveDataFilter(logging.Filter):
