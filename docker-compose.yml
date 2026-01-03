@@ -10,3 +10,7 @@ services:
     environment:
       # Override specific vars if needed
       - LOG_LEVEL=INFO
+      # Force color output for logs
+      - FORCE_COLOR=1
+      # Explicitly set database path
+      - DATABASE_PATH=/app/data/bountyhunter.db

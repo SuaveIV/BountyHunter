@@ -75,7 +75,10 @@ class ConsoleNoiseFilter(logging.Filter):
 
 
 def setup_logging():
-    colorama_init(autoreset=True)
+    # Force color if requested via environment variable (common in Docker)
+    force_color = os.getenv("FORCE_COLOR", "").lower() in ("1", "true")
+    colorama_init(autoreset=True, strip=False if force_color else None)
+
     # Remove existing handlers to ensure our configuration takes precedence
     root = logging.getLogger()
     for handler in root.handlers[:]:
