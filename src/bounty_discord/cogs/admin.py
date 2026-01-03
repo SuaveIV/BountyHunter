@@ -11,6 +11,7 @@ from ..logging_config import get_logger
 from ..utils import (
     create_fallback_message,
     create_game_embed,
+    enhance_details_with_itad,
     get_fallback_details,
     is_admin_dm,
 )
@@ -56,6 +57,8 @@ class Admin(commands.Cog):
             await ctx.send(f"❌ Could not fetch details for Steam ID `{steam_id}` (it might be invalid or hidden).")
             return
 
+        await enhance_details_with_itad(details, self.bot.itad_manager)
+
         # Create mock parsed data for testing
         parsed = {
             "text": "🎮 Check out this game on Steam! Great deal right now.",
@@ -89,6 +92,8 @@ class Admin(commands.Cog):
         if not details:
             await ctx.send(f"❌ Could not fetch details for Epic slug `{slug}`.")
             return
+
+        await enhance_details_with_itad(details, self.bot.itad_manager)
 
         # Create mock parsed data for testing
         parsed = {
@@ -124,6 +129,8 @@ class Admin(commands.Cog):
             await ctx.send("❌ Could not fetch details for itch.io URL.")
             return
 
+        await enhance_details_with_itad(details, self.bot.itad_manager)
+
         # Create mock parsed data for testing
         parsed = {
             "text": "🎮 Free game on itch.io!",
@@ -157,6 +164,8 @@ class Admin(commands.Cog):
         if not details:
             await ctx.send("❌ Could not fetch details for PlayStation Store URL.")
             return
+
+        await enhance_details_with_itad(details, self.bot.itad_manager)
 
         # Create mock parsed data for testing
         parsed = {
