@@ -51,8 +51,3 @@ exclude = [
     "**/__pycache__",
     ".git"
 ]
-
-[tool.pytest.ini_options]
-pythonpath = ["src"]
-asyncio_mode = "auto"
-testpaths = ["tests"]
