@@ -1,0 +1,13 @@
+{
+    "recommendations": [
+        "charliermarsh.ruff",
+        "djsaunders1997.uv-wingman",
+        "nefrob.vscode-just-syntax",
+        "hverlin.mise-vscode",
+        "tombi-toml.tombi",
+        "ms-python.python",
+        "ms-python.debugpy",
+        "ms-python.vscode-python-envs",
+        "ms-python.vscode-pylance"
+    ]
+}
