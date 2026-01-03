@@ -1,4 +1,7 @@
+import asyncio
 import datetime
+import logging
+import random
 
 import aiohttp
 import discord
@@ -41,6 +44,34 @@ def is_admin_dm():
     return commands.check(predicate)
 
 
+class DiscordLoggingHandler(logging.Handler):
+    """Custom logging handler to send Critical errors to the Admin via DM."""
+
+    def __init__(self, bot):
+        super().__init__()
+        self.bot = bot
+        self.setLevel(logging.CRITICAL)
+
+    def emit(self, record):
+        try:
+            log_entry = self.format(record)
+            self.bot.loop.create_task(self.send_dm(log_entry))
+        except Exception:
+            pass
+
+    async def send_dm(self, message):
+        if not ADMIN_DISCORD_ID:
+            return
+        try:
+            user = await self.bot.fetch_user(int(ADMIN_DISCORD_ID))
+            if user:
+                if len(message) > 1900:
+                    message = message[:1900] + "..."
+                await user.send(f"🚨 **CRITICAL ERROR** 🚨\n```\n{message}\n```")
+        except Exception:
+            pass
+
+
 class FreeGames(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -55,6 +86,11 @@ class FreeGames(commands.Cog):
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
         self.scanner = SectorScanner(RedditRSSFetcher(self._http_session), self.store)
 
+        # Setup Critical Error Logging to DM
+        self.log_handler = DiscordLoggingHandler(bot)
+        self.log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+        logging.getLogger().addHandler(self.log_handler)
+
         # Start the scheduled check loop
         self.scheduled_check.start()
 
@@ -62,6 +98,7 @@ class FreeGames(commands.Cog):
             logger.warning("ADMIN_DISCORD_ID is not set. Admin commands and error DMs will be disabled.")
 
     async def cog_unload(self):
+        logging.getLogger().removeHandler(self.log_handler)
         if self._http_session:
             await self._http_session.close()
 
@@ -373,6 +410,8 @@ class FreeGames(commands.Cog):
     # Scheduled task
     @tasks.loop(time=[datetime.time(hour=h, minute=m, tzinfo=datetime.UTC) for h in range(24) for m in (0, 30)])
     async def scheduled_check(self):
+        # Add a small random delay (jitter) to avoid exact-time spikes
+        await asyncio.sleep(random.uniform(1, 10))
         await self._process_feed(manual=False)
 
     @scheduled_check.before_loop

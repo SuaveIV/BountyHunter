@@ -32,6 +32,20 @@ class SensitiveDataFilter(logging.Filter):
         return True
 
 
+class ConsoleNoiseFilter(logging.Filter):
+    """Filter to exclude common noise/safe warnings from the console."""
+
+    def filter(self, record):
+        msg = str(record.msg)
+        # Filter clock drift from tasks
+        if record.name == "discord.ext.tasks" and "Clock drift detected" in msg:
+            return False
+        # Filter heartbeat blocked warnings (common during heavy processing)
+        if record.name == "discord.gateway" and "heartbeat blocked" in msg:
+            return False
+        return True
+
+
 def setup_logging():
     colorama_init(autoreset=True)
     # Remove existing handlers to ensure our configuration takes precedence
@@ -59,6 +73,7 @@ def setup_logging():
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
+    console_handler.addFilter(ConsoleNoiseFilter())
     root.addHandler(console_handler)
 
     # File Handler (Plain text, Rotating) - Always DEBUG
