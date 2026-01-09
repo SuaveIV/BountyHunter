@@ -1,3 +1,6 @@
+import json
+from io import BytesIO
+
 import discord
 from discord.ext import commands
 
@@ -291,6 +294,14 @@ class Admin(commands.Cog):
                 elif p_urls and self.bot.ps_manager:
                     details = await get_ps_details(p_urls[0], self.bot.ps_manager, self.bot.store)
 
+                # Universal Fallback
+                if not details and self.bot.itad_manager:
+                    details = await self.bot.itad_manager.find_game(
+                        steam_ids=list(s_ids) if s_ids else None,
+                        epic_slugs=list(e_slugs) if e_slugs else None,
+                        title=parsed.get("title"),
+                    )
+
                 # Fallback logic for test_scraper
                 if not details and parsed.get("links"):
                     details = await get_fallback_details(
@@ -359,6 +370,46 @@ class Admin(commands.Cog):
     async def myid(self, ctx: commands.Context):
         """Get your Discord ID (Admin DM only)."""
         await ctx.send(f"Your ID: `{ctx.author.id}`")
+
+    @commands.command(name="debug_itad")
+    @is_admin_dm()
+    async def debug_itad(self, ctx: commands.Context, query: str, mode: str = "search"):
+        """
+        Debug ITAD API responses.
+        Usage: !debug_itad <query> [search|steam|find]
+        Modes:
+          - search: Raw search results (default)
+          - steam: Lookup by Steam AppID
+          - find: Test the universal fallback logic (simulates Visor)
+        """
+        if not self.bot.itad_manager:
+            await ctx.send("❌ ITAD Manager not initialized.")
+            return
+
+        await ctx.send(f"🔍 Querying ITAD ({mode}): `{query}`...")
+
+        data = None
+        try:
+            if mode == "steam":
+                data = await self.bot.itad_manager.lookup_game("steam", query)
+            elif mode == "find":
+                data = await self.bot.itad_manager.find_game(title=query)
+            else:
+                data = await self.bot.itad_manager.search_game(query, limit=3)
+
+            if not data:
+                await ctx.send("❌ No data returned.")
+                return
+
+            text = json.dumps(data, indent=2)
+            if len(text) > 1900:
+                file = discord.File(BytesIO(text.encode("utf-8")), filename="itad_debug.json")
+                await ctx.send(file=file)
+            else:
+                await ctx.send(f"```json\n{text}\n```")
+        except Exception as e:
+            logger.exception(f"ITAD Debug failed: {e}")
+            await ctx.send(f"❌ Error: {e}")
 
 
 async def setup(bot):

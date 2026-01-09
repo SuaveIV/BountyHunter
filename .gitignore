@@ -36,6 +36,10 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Logs
+logs/
+*.log
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -56,7 +60,6 @@ cover/
 *.pot
 
 # Django stuff:
-*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -164,6 +167,9 @@ dmypy.json
 
 # pytype static type analyzer
 .pytype/
+
+# Pyright
+.pyright/
 
 # Cython debug symbols
 cython_debug/

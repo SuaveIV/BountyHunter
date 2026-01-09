@@ -37,6 +37,26 @@ class ItadAPIManager:
             logger.error(f"Error searching ITAD for {title}: {e}")
             return []
 
+    async def lookup_game(self, shop: str, game_id: str) -> dict | None:
+        """
+        Lookup a game by shop ID (e.g. steam/400).
+        """
+        if not self.api_key:
+            return None
+
+        url = f"{self.BASE_URL}/games/lookup/v1"
+        params = {"key": self.api_key, "shop": shop, "id": game_id}
+        try:
+            async with self.session.get(url, params=params, headers=HEADERS) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("found"):
+                        return data.get("game")
+                return None
+        except Exception as e:
+            logger.error(f"Error looking up ITAD game for {shop}/{game_id}: {e}")
+            return None
+
     async def get_game_overview(self, game_ids: list[str], country: str = "US") -> dict | None:
         """
         Get price overview for a list of game IDs.
@@ -80,3 +100,47 @@ class ItadAPIManager:
             return None
 
         return {"game_info": game, "price_info": price_info}
+
+    async def find_game(
+        self,
+        steam_ids: list[str] | None = None,
+        epic_slugs: list[str] | None = None,
+        title: str | None = None,
+    ) -> dict | None:
+        """
+        Attempts to find a game using available IDs or title, returning a standardized details dict.
+        """
+        game = None
+
+        # 1. Try Steam ID
+        if steam_ids:
+            game = await self.lookup_game("steam", steam_ids[0])
+
+        # 2. Try Epic Slug (via search)
+        if not game and epic_slugs:
+            search_term = epic_slugs[0].replace("-", " ")
+            results = await self.search_game(search_term, limit=1)
+            if results:
+                game = results[0]
+
+        # 3. Try Title
+        if not game and title:
+            results = await self.search_game(title, limit=1)
+            if results:
+                game = results[0]
+
+        if game:
+            assets = game.get("assets", {})
+            image = (
+                assets.get("banner600") or assets.get("banner400") or assets.get("banner300") or assets.get("boxart")
+            )
+            return {
+                "name": game["title"],
+                "is_free": True,
+                "developers": [],
+                "publishers": [],
+                "release_date": None,
+                "image": image,
+                "price_info": "Free to Play",
+            }
+        return None

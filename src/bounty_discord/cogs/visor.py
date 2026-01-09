@@ -95,6 +95,14 @@ class SectorVisor(commands.Cog):
             elif ps_urls and self.bot.ps_manager:
                 details = await get_ps_details(ps_urls[0], self.bot.ps_manager, self.bot.store)
 
+            # Universal Fallback: Use ITAD if primary store failed
+            if not details and self.bot.itad_manager:
+                details = await self.bot.itad_manager.find_game(
+                    steam_ids=list(steam_ids) if steam_ids else None,
+                    epic_slugs=list(epic_slugs) if epic_slugs else None,
+                    title=parsed.get("title"),
+                )
+
             # Fallback: use generic details if specific manager didn't handle it
             if not details and parsed.get("links"):
                 details = await get_fallback_details(
