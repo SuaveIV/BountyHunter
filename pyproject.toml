@@ -12,6 +12,7 @@ dependencies = [
     "beautifulsoup4",
     "feedparser>=6.0.12",
     "colorama>=0.4.6",
+    "pydantic>=2.12.5",
 ]
 
 [project.optional-dependencies]

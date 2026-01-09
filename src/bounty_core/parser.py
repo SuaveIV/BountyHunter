@@ -1,15 +1,7 @@
 import re
 
-# Heuristics ported from FamilyBot
-DENY_DOMAINS = {
-    "givee.club",
-    "gleam.io",
-    "indiegala.com",
-    "rafflecopter.com",
-    "woobox.com",
-    "stove.com",
-    "onstove.com",
-}
+from .constants import DENY_DOMAINS
+
 STEAM_APP_REGEX = re.compile(r"store\.steampowered\.com/app/(\d+)")
 ITCH_GAME_REGEX = re.compile(r"(https?://[a-zA-Z0-9-]+\.itch\.io/[a-zA-Z0-9-]+)")
 PS_GAME_REGEX = re.compile(r"(https?://store\.playstation\.com/(?:[^/]+/)?product/([a-zA-Z0-9_-]+))")
