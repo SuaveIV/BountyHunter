@@ -1,14 +1,10 @@
 import asyncio
 import datetime
 import random
+from typing import Any
 
 import discord
 from discord.ext import commands, tasks
-
-from bounty_core.epic import get_game_details as get_epic_details
-from bounty_core.itch import get_game_details as get_itch_details
-from bounty_core.ps import get_game_details as get_ps_details
-from bounty_core.steam import get_game_details
 
 from ..config import ADMIN_DISCORD_ID
 from ..logging_config import get_logger
@@ -16,7 +12,7 @@ from ..utils import (
     create_fallback_message,
     create_game_embed,
     enhance_details_with_itad,
-    get_fallback_details,
+    resolve_game_details,
     send_message,
 )
 
@@ -71,7 +67,7 @@ class SectorVisor(commands.Cog):
             logger.exception("Error while processing feed: %s", e)
             await self._send_admin_dm(str(e))
 
-    async def _announce_new(self, items, manual=False):
+    async def _announce_new(self, items: list[tuple[str, dict[str, Any]]], manual: bool = False):
         if not items:
             return
         subs = await self.bot.store.get_subscriptions()
@@ -80,34 +76,7 @@ class SectorVisor(commands.Cog):
             return
 
         for _uri, parsed in items:
-            steam_ids = parsed.get("steam_app_ids", [])
-            epic_slugs = parsed.get("epic_slugs", [])
-            itch_urls = parsed.get("itch_urls", [])
-            ps_urls = parsed.get("ps_urls", [])
-
-            details = None
-            if steam_ids and self.bot.steam_manager:
-                details = await get_game_details(steam_ids[0], self.bot.steam_manager, self.bot.store)
-            elif epic_slugs and self.bot.epic_manager:
-                details = await get_epic_details(epic_slugs[0], self.bot.epic_manager, self.bot.store)
-            elif itch_urls and self.bot.itch_manager:
-                details = await get_itch_details(itch_urls[0], self.bot.itch_manager, self.bot.store)
-            elif ps_urls and self.bot.ps_manager:
-                details = await get_ps_details(ps_urls[0], self.bot.ps_manager, self.bot.store)
-
-            # Universal Fallback: Use ITAD if primary store failed
-            if not details and self.bot.itad_manager:
-                details = await self.bot.itad_manager.find_game(
-                    steam_ids=list(steam_ids) if steam_ids else None,
-                    epic_slugs=list(epic_slugs) if epic_slugs else None,
-                    title=parsed.get("title"),
-                )
-
-            # Fallback: use generic details if specific manager didn't handle it
-            if not details and parsed.get("links"):
-                details = await get_fallback_details(
-                    parsed["links"], parsed["text"], self.bot.itad_manager, image=parsed.get("image")
-                )
+            details = await resolve_game_details(self.bot, parsed)
 
             # Metadata Enhancement: Check ITAD for missing images
             if details:

@@ -1,9 +1,14 @@
 import logging
+from typing import Any, cast
 
 import discord
 from discord.ext import commands
 
+from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.fetcher import TARGET_ACTOR
+from bounty_core.itch import get_game_details as get_itch_details
+from bounty_core.ps import get_game_details as get_ps_details
+from bounty_core.steam import get_game_details as get_steam_details
 from bounty_core.utils import enhance_details_with_itad, get_fallback_details
 
 from .config import ADMIN_DISCORD_ID
@@ -211,6 +216,45 @@ async def create_fallback_message(parsed: dict, role_id: int | None) -> str:
     return content
 
 
+async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dict[str, Any] | None:
+    """
+    Central logic to resolve game details from a parsed post using available bot managers.
+    """
+    # Cast to Any to access dynamic attributes (managers) without strict Gunship dependency
+    bot_any = cast(Any, bot)
+
+    steam_ids = parsed.get("steam_app_ids", [])
+    epic_slugs = parsed.get("epic_slugs", [])
+    itch_urls = parsed.get("itch_urls", [])
+    ps_urls = parsed.get("ps_urls", [])
+
+    details = None
+    if steam_ids and getattr(bot_any, "steam_manager", None):
+        details = await get_steam_details(steam_ids[0], bot_any.steam_manager, bot_any.store)
+    elif epic_slugs and getattr(bot_any, "epic_manager", None):
+        details = await get_epic_details(epic_slugs[0], bot_any.epic_manager, bot_any.store)
+    elif itch_urls and getattr(bot_any, "itch_manager", None):
+        details = await get_itch_details(itch_urls[0], bot_any.itch_manager, bot_any.store)
+    elif ps_urls and getattr(bot_any, "ps_manager", None):
+        details = await get_ps_details(ps_urls[0], bot_any.ps_manager, bot_any.store)
+
+    # Universal Fallback: Use ITAD if primary store failed
+    if not details and getattr(bot_any, "itad_manager", None):
+        details = await bot_any.itad_manager.find_game(
+            steam_ids=list(steam_ids) if steam_ids else None,
+            epic_slugs=list(epic_slugs) if epic_slugs else None,
+            title=parsed.get("title"),
+        )
+
+    # Fallback: use generic details if specific manager didn't handle it
+    if not details and parsed.get("links"):
+        details = await get_fallback_details(
+            parsed["links"], parsed["text"], getattr(bot_any, "itad_manager", None), image=parsed.get("image")
+        )
+
+    return details
+
+
 # Explicitly re-export for consumers of this module
 __all__ = [
     "is_admin_dm",
@@ -219,4 +263,5 @@ __all__ = [
     "create_fallback_message",
     "enhance_details_with_itad",
     "get_fallback_details",
+    "resolve_game_details",
 ]

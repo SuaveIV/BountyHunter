@@ -17,6 +17,7 @@ from ..utils import (
     enhance_details_with_itad,
     get_fallback_details,
     is_admin_dm,
+    resolve_game_details,
 )
 
 logger = get_logger(__name__)
@@ -279,34 +280,7 @@ class Admin(commands.Cog):
 
             for idx, (_uri, parsed) in enumerate(posts, 1):
                 # Fetch details
-                details = None
-                s_ids = parsed.get("steam_app_ids", [])
-                e_slugs = parsed.get("epic_slugs", [])
-                i_urls = parsed.get("itch_urls", [])
-                p_urls = parsed.get("ps_urls", [])
-
-                if s_ids and self.bot.steam_manager:
-                    details = await get_game_details(s_ids[0], self.bot.steam_manager, self.bot.store)
-                elif e_slugs and self.bot.epic_manager:
-                    details = await get_epic_details(e_slugs[0], self.bot.epic_manager, self.bot.store)
-                elif i_urls and self.bot.itch_manager:
-                    details = await get_itch_details(i_urls[0], self.bot.itch_manager, self.bot.store)
-                elif p_urls and self.bot.ps_manager:
-                    details = await get_ps_details(p_urls[0], self.bot.ps_manager, self.bot.store)
-
-                # Universal Fallback
-                if not details and self.bot.itad_manager:
-                    details = await self.bot.itad_manager.find_game(
-                        steam_ids=list(s_ids) if s_ids else None,
-                        epic_slugs=list(e_slugs) if e_slugs else None,
-                        title=parsed.get("title"),
-                    )
-
-                # Fallback logic for test_scraper
-                if not details and parsed.get("links"):
-                    details = await get_fallback_details(
-                        parsed["links"], parsed["text"], self.bot.itad_manager, image=parsed.get("image")
-                    )
+                details = await resolve_game_details(self.bot, parsed)
 
                 # Send result
                 await ctx.send(f"\n**Post {idx}/{len(posts)}:**")
