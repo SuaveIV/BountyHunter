@@ -6,6 +6,7 @@ from discord.ext import commands
 from bounty_core.db.engine import Database
 from bounty_core.epic_api_manager import EpicAPIManager
 from bounty_core.fetcher import RedditRSSFetcher
+from bounty_core.gog_api_manager import GogAPIManager
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch_api_manager import ItchAPIManager
 from bounty_core.ps_api_manager import PSAPIManager
@@ -48,6 +49,7 @@ class Gunship(commands.Bot):
         self.epic_manager = EpicAPIManager(session=self._http_session)
         self.itch_manager = ItchAPIManager(session=self._http_session)
         self.ps_manager = PSAPIManager(session=self._http_session)
+        self.gog_manager = GogAPIManager(session=self._http_session)
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
         self.scanner = SectorScanner(RedditRSSFetcher(self._http_session), self.store)
 

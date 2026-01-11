@@ -6,6 +6,7 @@ from discord.ext import commands
 
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.fetcher import TARGET_ACTOR
+from bounty_core.gog import get_game_details as get_gog_details
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.ps import get_game_details as get_ps_details
 from bounty_core.steam import get_game_details as get_steam_details
@@ -227,6 +228,7 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
     epic_slugs = parsed.get("epic_slugs", [])
     itch_urls = parsed.get("itch_urls", [])
     ps_urls = parsed.get("ps_urls", [])
+    gog_urls = parsed.get("gog_urls", [])
 
     details = None
     if steam_ids and getattr(bot_any, "steam_manager", None):
@@ -237,6 +239,8 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
         details = await get_itch_details(itch_urls[0], bot_any.itch_manager, bot_any.store)
     elif ps_urls and getattr(bot_any, "ps_manager", None):
         details = await get_ps_details(ps_urls[0], bot_any.ps_manager, bot_any.store)
+    elif gog_urls and getattr(bot_any, "gog_manager", None):
+        details = await get_gog_details(gog_urls[0], bot_any.gog_manager, bot_any.store)
 
     # Universal Fallback: Use ITAD if primary store failed
     if not details and getattr(bot_any, "itad_manager", None):

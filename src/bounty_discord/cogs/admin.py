@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 
 from bounty_core.epic import get_game_details as get_epic_details
+from bounty_core.gog import get_game_details as get_gog_details
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.parser import determine_content_type
 from bounty_core.ps import get_game_details as get_ps_details
@@ -15,7 +16,6 @@ from ..utils import (
     create_fallback_message,
     create_game_embed,
     enhance_details_with_itad,
-    get_fallback_details,
     is_admin_dm,
     resolve_game_details,
 )
@@ -190,6 +190,43 @@ class Admin(commands.Cog):
             logger.exception(f"Failed to create test embed: {e}")
             await ctx.send(f"❌ Failed to create embed: {e}")
 
+    @commands.command(name="test_embed_gog")
+    @is_admin_dm()
+    async def test_embed_gog(self, ctx: commands.Context, url: str):
+        """Generate a test embed for a GOG URL (Admin DM only)."""
+        await ctx.send("🔍 Generating test embed for GOG URL...")
+        if not self.bot.gog_manager:
+            await ctx.send("❌ GOG manager not initialized.")
+            return
+
+        details = await get_gog_details(url, self.bot.gog_manager, self.bot.store)
+
+        if not details:
+            await ctx.send(f"❌ Could not fetch details for GOG URL: `{url}`")
+            return
+
+        await enhance_details_with_itad(details, self.bot.itad_manager)
+
+        # Create mock parsed data for testing
+        parsed = {
+            "text": "🎮 Free game on GOG!",
+            "type": "GAME",
+            "links": [url],
+            "source_links": [],
+            "steam_app_ids": [],
+            "epic_slugs": [],
+            "itch_urls": [],
+            "ps_urls": [],
+            "gog_urls": [url],
+        }
+
+        try:
+            embed = await create_game_embed(details, parsed)
+            await ctx.send("✅ Test embed generated:", embed=embed)
+        except Exception as e:
+            logger.exception(f"Failed to create test embed: {e}")
+            await ctx.send(f"❌ Failed to create embed: {e}")
+
     @commands.command(name="test_embed_url")
     @is_admin_dm()
     async def test_embed_url(self, ctx: commands.Context, url: str, *, text: str = "Free Game Announcement"):
@@ -209,14 +246,18 @@ class Admin(commands.Cog):
             "epic_slugs": [],
             "itch_urls": [],
             "ps_urls": [],
+            "gog_urls": [],  # We'll let resolve_game_details handle the URL directly or via fallback
         }
 
-        # Use centralized fallback logic
-        details = await get_fallback_details([url], text, self.bot.itad_manager, image=None)
+        # Use centralized resolution logic (now respects all managers)
+        details = await resolve_game_details(self.bot, parsed)
 
         try:
-            embed = await create_game_embed(details, parsed)
-            await ctx.send("✅ Test embed generated:", embed=embed)
+            embed = await create_game_embed(details, parsed) if details else None
+            if embed:
+                await ctx.send("✅ Test embed generated:", embed=embed)
+            else:
+                await ctx.send("❌ No details could be resolved for this URL.")
         except Exception as e:
             logger.exception(f"Failed to create test embed: {e}")
             await ctx.send(f"❌ Failed to create embed: {e}")
@@ -237,27 +278,16 @@ class Admin(commands.Cog):
         await self.test_embed_itch(ctx, url="https://tobyfox.itch.io/deltarune")
 
         # 4. GOG
-        await self.test_embed_url(
-            ctx, url="https://www.gog.com/en/game/cyberpunk_2077", text="[GOG] Cyberpunk 2077 is free on GOG!"
-        )
+        await self.test_embed_gog(ctx, url="https://www.gog.com/en/game/cyberpunk_2077")
 
         # 5. Amazon Prime
         await self.test_embed_url(
             ctx, url="https://gaming.amazon.com/loot/fallout", text="[Prime] Fallout 76 is free with Prime Gaming!"
         )
 
-        # 6. STOVE
+        # 6. Generic Fallback
         await self.test_embed_url(
-            ctx,
-            url="https://store.onstove.com/en/games/1234",
-            text="[STOVE] SNK 40th Anniversary Collection is free on STOVE!",
-        )
-
-        # 7. PlayStation (Generic fallback as we don't have a stable ID for scraping)
-        await self.test_embed_url(
-            ctx,
-            url="https://store.playstation.com/en-us/product/UP9000-CUSA00917_00-THELASTOFUS00000",
-            text="[PS4] The Last of Us Remastered is free!",
+            ctx, url="https://example.com/free-game", text="[Unknown] Some Indie Game is free on Example.com!"
         )
 
         await ctx.send("✅ All examples generated.")

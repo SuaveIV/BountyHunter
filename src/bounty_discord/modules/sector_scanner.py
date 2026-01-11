@@ -5,6 +5,7 @@ from bounty_core.fetcher import RedditRSSFetcher
 from bounty_core.parser import (
     determine_content_type,
     extract_epic_slugs,
+    extract_gog_urls,
     extract_itch_urls,
     extract_ps_urls,
     extract_steam_ids,
@@ -73,6 +74,7 @@ class SectorScanner:
                     epic_slugs = extract_epic_slugs(search_blob)
                     itch_urls = extract_itch_urls(search_blob)
                     ps_urls = extract_ps_urls(search_blob)
+                    gog_urls = extract_gog_urls(search_blob)
 
                     parsed = {
                         "uri": uri,
@@ -84,6 +86,7 @@ class SectorScanner:
                         "epic_slugs": list(epic_slugs),
                         "itch_urls": list(itch_urls),
                         "ps_urls": list(ps_urls),
+                        "gog_urls": list(gog_urls),
                         "image": thumbnail,
                     }
 

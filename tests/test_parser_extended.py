@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from bounty_core.parser import (
     extract_epic_slugs,
     extract_game_title,
+    extract_gog_urls,
     extract_itch_urls,
     extract_og_data,
     extract_ps_urls,
@@ -38,6 +39,15 @@ def test_extract_ps_urls():
     urls = extract_ps_urls(text)
     # The regex captures the full URL in group 1
     assert urls == {"https://store.playstation.com/en-us/product/UP9000-CUSA00917_00-THELASTOFUS00000"}
+
+
+def test_extract_gog_urls():
+    text = "GOG freebie: https://www.gog.com/game/cyberpunk_2077 and https://gog.com/en/game/witcher_3"
+    urls = extract_gog_urls(text)
+    assert urls == {
+        "https://www.gog.com/game/cyberpunk_2077",
+        "https://gog.com/en/game/witcher_3",
+    }
 
 
 def test_extract_og_data_standard():

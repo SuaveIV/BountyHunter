@@ -8,6 +8,7 @@ STEAM_APP_REGEX = re.compile(r"store\.steampowered\.com/app/(\d+)")
 ITCH_GAME_REGEX = re.compile(r"(https?://[a-zA-Z0-9-]+\.itch\.io/[a-zA-Z0-9-]+)")
 PS_GAME_REGEX = re.compile(r"(https?://store\.playstation\.com/(?:[^/]+/)?product/([a-zA-Z0-9_-]+))")
 EPIC_GAME_REGEX = re.compile(r"store\.epicgames\.com/(?:[^/]+/)?p/([^/\s?]+)")
+GOG_GAME_REGEX = re.compile(r"(https?://(?:www\.)?gog\.com/(?:[a-z]{2}/)?game/[a-zA-Z0-9_-]+)")
 URL_REGEX = re.compile(r"(https?://[^\s]+)")
 FGF_TITLE_REGEX = re.compile(r"^[\[\(].*?[\]\)]\s*(?:\(.*?\)\s*)?(.+?) is free", re.IGNORECASE | re.MULTILINE)
 FGF_PSA_REGEX = re.compile(r"^\[PSA\]\s*(.+?)\s*(?:are|is) complimentary", re.IGNORECASE | re.MULTILINE)
@@ -68,6 +69,11 @@ def extract_ps_urls(text: str) -> set[str]:
     # PS_GAME_REGEX matches the full URL in group 1
     matches = PS_GAME_REGEX.findall(text)
     return {m[0] for m in matches}
+
+
+def extract_gog_urls(text: str) -> set[str]:
+    """Extracts unique GOG game URLs from a block of text."""
+    return set(GOG_GAME_REGEX.findall(text))
 
 
 def is_safe_link(url: str) -> bool:

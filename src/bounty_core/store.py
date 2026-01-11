@@ -123,6 +123,12 @@ class Store:
     async def cache_ps_details(self, url: str, data: dict, permanent: bool = False):
         await self.cache_details("ps", url, data, permanent)
 
+    async def get_cached_gog_details(self, url: str) -> dict[str, Any] | None:
+        return await self.get_cached_details("gog", url)
+
+    async def cache_gog_details(self, url: str, data: dict, permanent: bool = False):
+        await self.cache_details("gog", url, data, permanent)
+
     async def clear_cache(self):
         async with self.db.session as session:
             await session.execute(delete(GameCache))
