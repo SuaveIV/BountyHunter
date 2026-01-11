@@ -1,5 +1,6 @@
 import json
 from io import BytesIO
+from typing import Any
 
 import discord
 from discord.ext import commands
@@ -30,6 +31,31 @@ class Admin(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+
+    def _create_mock_parsed(self, text: str, url: str, **kwargs) -> dict[str, Any]:
+        """Creates a standardized mock parsed dictionary for testing."""
+        # Detect mobile links if it's an Epic URL
+        mobile_links = {}
+        if "store.epicgames.com" in url:
+            if "-android-" in url.lower():
+                mobile_links["Android"] = url
+            elif "-ios-" in url.lower():
+                mobile_links["iOS"] = url
+
+        data = {
+            "text": text,
+            "type": determine_content_type(text),
+            "links": [url],
+            "source_links": [],
+            "steam_app_ids": [],
+            "epic_slugs": [],
+            "epic_mobile_links": mobile_links,
+            "itch_urls": [],
+            "ps_urls": [],
+            "gog_urls": [],
+        }
+        data.update(kwargs)
+        return data
 
     @commands.command(name="force_free")
     @is_admin_dm()
@@ -64,16 +90,12 @@ class Admin(commands.Cog):
         await enhance_details_with_itad(details, self.bot.itad_manager)
 
         # Create mock parsed data for testing
-        parsed = {
-            "text": "🎮 Check out this game on Steam! Great deal right now.",
-            "type": "GAME",
-            "links": [f"https://store.steampowered.com/app/{steam_id}/"],
-            "source_links": ["https://reddit.com/r/GameDeals/comments/example"],
-            "steam_app_ids": [steam_id],
-            "epic_slugs": [],
-            "itch_urls": [],
-            "ps_urls": [],
-        }
+        parsed = self._create_mock_parsed(
+            "🎮 Check out this game on Steam! Great deal right now.",
+            f"https://store.steampowered.com/app/{steam_id}/",
+            steam_app_ids=[steam_id],
+            source_links=["https://reddit.com/r/GameDeals/comments/example"],
+        )
 
         try:
             embed = await create_game_embed(details, parsed)
@@ -100,16 +122,8 @@ class Admin(commands.Cog):
         await enhance_details_with_itad(details, self.bot.itad_manager)
 
         # Create mock parsed data for testing
-        parsed = {
-            "text": "🎮 Free game available on Epic Games Store!",
-            "type": "GAME",
-            "links": [f"https://store.epicgames.com/p/{slug}"],
-            "source_links": [],
-            "steam_app_ids": [],
-            "epic_slugs": [slug],
-            "itch_urls": [],
-            "ps_urls": [],
-        }
+        url = f"https://store.epicgames.com/p/{slug}"
+        parsed = self._create_mock_parsed("🎮 Free game available on Epic Games Store!", url, epic_slugs=[slug])
 
         try:
             embed = await create_game_embed(details, parsed)
@@ -136,16 +150,7 @@ class Admin(commands.Cog):
         await enhance_details_with_itad(details, self.bot.itad_manager)
 
         # Create mock parsed data for testing
-        parsed = {
-            "text": "🎮 Free game on itch.io!",
-            "type": "GAME",
-            "links": [url],
-            "source_links": [],
-            "steam_app_ids": [],
-            "epic_slugs": [],
-            "itch_urls": [url],
-            "ps_urls": [],
-        }
+        parsed = self._create_mock_parsed("🎮 Free game on itch.io!", url, itch_urls=[url])
 
         try:
             embed = await create_game_embed(details, parsed)
@@ -172,16 +177,7 @@ class Admin(commands.Cog):
         await enhance_details_with_itad(details, self.bot.itad_manager)
 
         # Create mock parsed data for testing
-        parsed = {
-            "text": "🎮 Free game on PlayStation Store!",
-            "type": "GAME",
-            "links": [url],
-            "source_links": [],
-            "steam_app_ids": [],
-            "epic_slugs": [],
-            "itch_urls": [],
-            "ps_urls": [url],
-        }
+        parsed = self._create_mock_parsed("🎮 Free game on PlayStation Store!", url, ps_urls=[url])
 
         try:
             embed = await create_game_embed(details, parsed)
@@ -208,17 +204,7 @@ class Admin(commands.Cog):
         await enhance_details_with_itad(details, self.bot.itad_manager)
 
         # Create mock parsed data for testing
-        parsed = {
-            "text": "🎮 Free game on GOG!",
-            "type": "GAME",
-            "links": [url],
-            "source_links": [],
-            "steam_app_ids": [],
-            "epic_slugs": [],
-            "itch_urls": [],
-            "ps_urls": [],
-            "gog_urls": [url],
-        }
+        parsed = self._create_mock_parsed("🎮 Free game on GOG!", url, gog_urls=[url])
 
         try:
             embed = await create_game_embed(details, parsed)
@@ -236,18 +222,8 @@ class Admin(commands.Cog):
         """
         await ctx.send(f"🔍 Generating test embed for URL: `{url}`...")
 
-        # Create mock parsed data
-        parsed = {
-            "text": text,
-            "type": determine_content_type(text),
-            "links": [url],
-            "source_links": [],
-            "steam_app_ids": [],
-            "epic_slugs": [],
-            "itch_urls": [],
-            "ps_urls": [],
-            "gog_urls": [],  # We'll let resolve_game_details handle the URL directly or via fallback
-        }
+        # Create mock parsed data via helper
+        parsed = self._create_mock_parsed(text, url)
 
         # Use centralized resolution logic (now respects all managers)
         details = await resolve_game_details(self.bot, parsed)
