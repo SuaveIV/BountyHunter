@@ -98,6 +98,7 @@ docker-compose up -d --build
 BountyHunter is powered by these awesome open-source projects and data sources:
 
 **Core Libraries:**
+
 - [discord.py](https://github.com/Rapptz/discord.py) — API wrapper for Discord.
 - [SQLAlchemy](https://www.sqlalchemy.org/) — Database ORM (Async).
 - [aiohttp](https://docs.aiohttp.org/) — Async HTTP client.
@@ -105,5 +106,6 @@ BountyHunter is powered by these awesome open-source projects and data sources:
 - [feedparser](https://github.com/kurtmckee/feedparser) — RSS feed parsing.
 
 **Data Sources:**
+
 - **Reddit**: [r/FreeGameFindings](https://www.reddit.com/r/FreeGameFindings/) for discovering new free game announcements.
 - **IsThereAnyDeal**: [API](https://isthereanydeal.com/) for price history and metadata enhancement.
