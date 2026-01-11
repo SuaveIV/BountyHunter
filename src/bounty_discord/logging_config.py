@@ -71,6 +71,16 @@ class ConsoleNoiseFilter(logging.Filter):
         # Filter heartbeat blocked warnings (common during heavy processing)
         if record.name == "discord.gateway" and "heartbeat blocked" in msg:
             return False
+
+        # Clean up noisy DNS reconnection logs (keep the message, hide the traceback)
+        if record.name == "discord.client" and "Attempting a reconnect" in msg:
+            if record.exc_info:
+                # Check if it's a DNS/Socket error
+                exc_type, _, _ = record.exc_info
+                if exc_type and ("ClientConnectorDNSError" in exc_type.__name__ or "gaierror" in exc_type.__name__):
+                    # Suppress the traceback for the console
+                    record.exc_info = None
+
         return True
 
 
