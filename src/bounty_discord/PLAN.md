@@ -8,7 +8,7 @@ This document outlines the roadmap for improving the BountyHunter codebase, focu
 
 * **Centralize Constants**: Move magic strings and configuration lists (like `DENY_DOMAINS`) to a dedicated `constants.py` to avoid duplication and typos.
 * **Harden Configuration**: Implement validation for environment variables to ensure the bot fails fast if misconfigured (e.g., missing Token), rather than failing silently at runtime.
-* **Resolve Circular Dependencies**: Refactor `bounty_core` imports. Likely requires creating a separate `models.py` or `types.py` for shared data structures used by both Managers and the core logic.
+* **Resolve Circular Dependencies**: Refactor `bounty_core` and `bounty_discord` imports. Likely requires creating a separate `models.py` or `types.py` for shared data structures used by both Managers and the core logic.
 
 ### Phase 2: Code Quality & Architecture (Medium Priority)
 
@@ -39,9 +39,8 @@ This document outlines the roadmap for improving the BountyHunter codebase, focu
 
 ### Core Refactoring
 
-* [ ] Audit `bounty_core` imports to identify and fix circular dependencies.
-
-* [ ] Move `get_fallback_details` and `enhance_details_with_itad` from `discord/utils.py` to `bounty_core`.
+* [x] Audit `bounty_core` and `bounty_discord` imports to identify and fix circular dependencies.
+* [x] Move `get_fallback_details` and `enhance_details_with_itad` from `discord/utils.py` to `bounty_core`.
 * [ ] Create `ImageUtils` class/module to deduplicate image URL extraction logic.
 
 ### Reliability

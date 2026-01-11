@@ -4,9 +4,9 @@ import discord
 from discord.ext import commands
 
 from bounty_core.fetcher import TARGET_ACTOR
-from bounty_core.parser import extract_game_title
+from bounty_core.utils import enhance_details_with_itad, get_fallback_details
 
-from .config import ADMIN_DISCORD_ID, ITAD_API_KEY
+from .config import ADMIN_DISCORD_ID
 
 logger = logging.getLogger(__name__)
 
@@ -211,63 +211,12 @@ async def create_fallback_message(parsed: dict, role_id: int | None) -> str:
     return content
 
 
-async def get_fallback_details(links: list[str], text: str, itad_manager, image: str | None = None) -> dict:
-    """
-    Generate basic details from links/text when no specific API manager is available.
-    Optionally attempts to fetch missing image from ITAD.
-    """
-    fallback_url = None
-    for link in links:
-        if any(d in link for d in ["gog.com", "amazon.com", "onstove.com", "stove.com"]):
-            fallback_url = link
-            break
-    if not fallback_url and links:
-        fallback_url = links[0]
-
-    if not fallback_url:
-        return {}
-
-    title = extract_game_title(text) or "Free Game"
-
-    # Heuristic: if title wasn't extracted and text is short, assume text is the title
-    if title == "Free Game" and text and len(text) < 50 and "http" not in text:
-        title = text
-
-    details = {
-        "name": title,
-        "store_url": fallback_url,
-        "image": image,
-    }
-
-    # Use the shared enhancement function to try getting an image if missing
-    if not details["image"] and itad_manager:
-        await enhance_details_with_itad(details, itad_manager)
-
-    return details
-
-
-async def enhance_details_with_itad(details: dict, itad_manager) -> None:
-    """
-    Attempts to fetch missing metadata (currently just image) from ITAD
-    for any given details dictionary. Modifies details in-place.
-    """
-    if not ITAD_API_KEY:
-        return
-
-    title = details.get("name")
-    if not title or title == "Free Game":
-        return
-
-    # If image is missing, try to find it
-    if not details.get("image"):
-        try:
-            results = await itad_manager.search_game(title, limit=1)
-            if results:
-                game_info = results[0]
-                assets = game_info.get("assets", {})
-                banner = assets.get("banner400") or assets.get("banner300") or assets.get("boxArt")
-                if banner:
-                    details["image"] = banner
-                    logger.info(f"Fetched image for '{title}' from ITAD")
-        except Exception as e:
-            logger.warning(f"Failed to fetch ITAD image for '{title}': {e}")
+# Explicitly re-export for consumers of this module
+__all__ = [
+    "is_admin_dm",
+    "send_message",
+    "create_game_embed",
+    "create_fallback_message",
+    "enhance_details_with_itad",
+    "get_fallback_details",
+]

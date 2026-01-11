@@ -67,35 +67,24 @@ async def test_enhance_details_with_itad_success():
     details = {"name": "Portal", "image": None}
 
     mock_manager = MagicMock()
+    mock_manager.api_key = "test_key"
     mock_manager.search_game = AsyncMock(
         return_value=[{"title": "Portal", "assets": {"banner400": "http://img.com/portal.jpg"}}]
     )
 
-    # We need to ensure ITAD_API_KEY is considered present.
-    # The function imports ITAD_API_KEY from config.
-    # If config doesn't have it set in env, it might fail.
-    # We can mock the module attribute?
-    # Or rely on the fact that if ITAD_API_KEY is empty, it returns early.
-    # To properly test this, we should patch config.
+    await enhance_details_with_itad(details, mock_manager)
 
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("bounty_discord.utils.ITAD_API_KEY", "test_key")
-
-        await enhance_details_with_itad(details, mock_manager)
-
-        assert details["image"] == "http://img.com/portal.jpg"
-        mock_manager.search_game.assert_called_once_with("Portal", limit=1)
+    assert details["image"] == "http://img.com/portal.jpg"
+    mock_manager.search_game.assert_called_once_with("Portal", limit=1)
 
 
 @pytest.mark.asyncio
 async def test_enhance_details_with_itad_no_result():
     details = {"name": "Unknown Game", "image": None}
     mock_manager = MagicMock()
+    mock_manager.api_key = "test_key"
     mock_manager.search_game = AsyncMock(return_value=[])
 
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr("bounty_discord.utils.ITAD_API_KEY", "test_key")
+    await enhance_details_with_itad(details, mock_manager)
 
-        await enhance_details_with_itad(details, mock_manager)
-
-        assert details["image"] is None
+    assert details["image"] is None
