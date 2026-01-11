@@ -61,4 +61,5 @@ exclude = [
 [dependency-groups]
 dev = [
     "pyright>=1.1.407",
+    "pytest-cov>=7.0.0",
 ]

@@ -23,7 +23,7 @@ This document outlines the roadmap for improving the BountyHunter codebase, focu
 
 ### Phase 4: Testing & Documentation (Low Priority)
 
-* **Test Coverage**: Write unit tests for `parser.py` covering edge cases (unicode, mixed text). Create integration tests for the database layer.
+* [x] Test Coverage: Write unit tests for `parser.py` covering edge cases (unicode, mixed text). Create integration tests for the database layer. (Completed).
 * **Documentation**: Add docstrings to all public functions. Create a `CONTRIBUTING.md` with architectural overview.
 
 ---
