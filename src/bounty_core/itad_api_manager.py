@@ -3,6 +3,13 @@ from typing import Any
 
 import aiohttp
 
+from bounty_core.exceptions import (
+    AccessDenied,
+    APIError,
+    GameNotFound,
+    NetworkError,
+    RateLimitExceeded,
+)
 from bounty_core.network import HEADERS
 
 logger = logging.getLogger(__name__)
@@ -30,12 +37,19 @@ class ItadAPIManager:
                 if resp.status == 200:
                     data = await resp.json()
                     return data
+                elif resp.status == 429:
+                    raise RateLimitExceeded("ITAD")
+                elif resp.status in (401, 403):
+                    raise AccessDenied("ITAD", resp.status)
                 else:
-                    logger.warning(f"ITAD Search failed: {resp.status} - {await resp.text()}")
-                    return []
+                    raise APIError("ITAD", resp.status, await resp.text())
+        except aiohttp.ClientError as e:
+            raise NetworkError(f"ITAD connection failed: {e}", e) from e
+        except (RateLimitExceeded, AccessDenied, APIError):
+            raise
         except Exception as e:
             logger.error(f"Error searching ITAD for {title}: {e}")
-            return []
+            raise APIError("ITAD", message=str(e)) from e
 
     async def lookup_game(self, shop: str, game_id: str) -> dict | None:
         """
@@ -52,10 +66,18 @@ class ItadAPIManager:
                     data = await resp.json()
                     if data.get("found"):
                         return data.get("game")
-                return None
+                    raise GameNotFound(f"{shop}/{game_id}", "ITAD")
+                elif resp.status == 429:
+                    raise RateLimitExceeded("ITAD")
+                elif resp.status in (401, 403):
+                    raise AccessDenied("ITAD", resp.status)
+                else:
+                    raise APIError("ITAD", resp.status)
+        except aiohttp.ClientError as e:
+            raise NetworkError(f"ITAD connection failed: {e}", e) from e
         except Exception as e:
             logger.error(f"Error looking up ITAD game for {shop}/{game_id}: {e}")
-            return None
+            raise APIError("ITAD", message=str(e)) from e
 
     async def get_game_overview(self, game_ids: list[str], country: str = "US") -> dict | None:
         """
@@ -70,12 +92,17 @@ class ItadAPIManager:
             async with self.session.post(url, params=params, json=game_ids, headers=HEADERS) as resp:
                 if resp.status == 200:
                     return await resp.json()
+                elif resp.status == 429:
+                    raise RateLimitExceeded("ITAD")
+                elif resp.status in (401, 403):
+                    raise AccessDenied("ITAD", resp.status)
                 else:
-                    logger.warning(f"ITAD Overview failed: {resp.status} - {await resp.text()}")
-                    return None
+                    raise APIError("ITAD", resp.status, await resp.text())
+        except aiohttp.ClientError as e:
+            raise NetworkError(f"ITAD connection failed: {e}", e) from e
         except Exception as e:
             logger.error(f"Error getting ITAD overview: {e}")
-            return None
+            raise APIError("ITAD", message=str(e)) from e
 
     async def get_best_price(self, title: str, country: str = "US") -> dict | None:
         """

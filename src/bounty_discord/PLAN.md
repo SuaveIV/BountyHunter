@@ -13,7 +13,7 @@ This document outlines the roadmap for improving the BountyHunter codebase, focu
 ### Phase 2: Code Quality & Architecture (Medium Priority)
 
 * **Separation of Concerns**: Split `utils.py` in the discord module. Move game data fetching logic to `bounty_core` and keep only Discord UI helpers in `bounty_discord`.
-* **Standardize Error Handling**: Decide on a pattern (Result pattern or Custom Exceptions) and apply it across all API managers.
+* [x] Standardize Error Handling: Decide on a pattern (Result pattern or Custom Exceptions) and apply it across all API managers.
 * **Type Safety**: Audit `cogs/` and `bounty_core` to ensure 100% type hint coverage.
 
 ### Phase 3: Performance & Reliability (Medium Priority)
@@ -41,7 +41,7 @@ This document outlines the roadmap for improving the BountyHunter codebase, focu
 
 * [x] Audit `bounty_core` and `bounty_discord` imports to identify and fix circular dependencies.
 * [x] Move `get_fallback_details` and `enhance_details_with_itad` from `discord/utils.py` to `bounty_core`.
-* [ ] Create `ImageUtils` class/module to deduplicate image URL extraction logic.
+* [x] Create `ImageUtils` class/module to deduplicate image URL extraction logic (Implemented as `extract_og_data` in `parser.py`).
 
 ### Reliability
 

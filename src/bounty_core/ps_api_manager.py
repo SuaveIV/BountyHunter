@@ -4,6 +4,14 @@ import logging
 import aiohttp
 from bs4 import BeautifulSoup
 
+from bounty_core.exceptions import (
+    AccessDenied,
+    APIError,
+    GameNotFound,
+    NetworkError,
+    RateLimitExceeded,
+    ScrapingError,
+)
 from bounty_core.network import HEADERS
 from bounty_core.parser import extract_og_data
 
@@ -22,14 +30,24 @@ class PSAPIManager:
         """Fetches the page content and returns parsed game data."""
         try:
             async with self.session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 404:
+                    raise GameNotFound(url, "PS Store")
+                if resp.status == 429:
+                    raise RateLimitExceeded("PS Store")
+                if resp.status == 403:
+                    raise AccessDenied("PS Store", resp.status)
                 if resp.status != 200:
-                    logger.warning(f"PS Store returned {resp.status} for {url}")
-                    return None
+                    raise APIError("PS Store", resp.status)
+
                 text = await resp.text()
                 return self._parse_html(text, url)
+        except aiohttp.ClientError as e:
+            raise NetworkError(f"PS Store connection failed: {e}", e) from e
+        except (GameNotFound, RateLimitExceeded, AccessDenied, APIError):
+            raise
         except Exception as e:
             logger.error(f"Error fetching PS Store details for {url}: {e}")
-            return None
+            raise ScrapingError("PS Store", url, str(e)) from e
 
     def _parse_html(self, html: str, url: str) -> dict:
         """Extracts name, image, and price from the HTML body."""

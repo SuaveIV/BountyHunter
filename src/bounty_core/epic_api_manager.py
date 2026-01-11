@@ -5,6 +5,14 @@ from typing import Any
 import aiohttp
 from bs4 import BeautifulSoup
 
+from bounty_core.exceptions import (
+    AccessDenied,
+    APIError,
+    GameNotFound,
+    NetworkError,
+    RateLimitExceeded,
+    ScrapingError,
+)
 from bounty_core.network import HEADERS
 from bounty_core.parser import extract_og_data
 
@@ -38,10 +46,12 @@ class EpicAPIManager:
                     self.last_free_games_fetch = now
         except Exception as e:
             logger.error(f"Failed to update Epic free games cache: {e}")
+            # We don't raise here to avoid blocking product details fetch if just this fails
 
     async def fetch_product_details(self, slug: str) -> dict | None:
         """
         Fetches product details. Tries the CMS API first, then falls back to HTML scraping.
+        Raises BountyException subclasses on failure.
         """
         # 1. Try CMS API
         cms_url = f"https://store-content.ak.epicgames.com/api/en-US/content/products/{slug}"
@@ -52,6 +62,13 @@ class EpicAPIManager:
                     await self._ensure_free_games_cache()
                     is_free = self._check_is_free(slug)
                     return self._parse_api_data(cms_data, is_free)
+                elif resp.status == 404:
+                    # Not found in CMS, might still exist as a page to scrape
+                    pass
+                elif resp.status == 429:
+                    raise RateLimitExceeded("Epic API")
+        except aiohttp.ClientError as e:
+            logger.warning(f"Epic CMS API connection error for {slug}: {e}")
         except Exception as e:
             logger.warning(f"Epic CMS API failed for {slug}: {e}")
 
@@ -71,9 +88,15 @@ class EpicAPIManager:
         url = f"https://store.epicgames.com/en-US/p/{slug}"
         try:
             async with self.session.get(url, headers=HEADERS) as resp:
+                if resp.status == 404:
+                    raise GameNotFound(slug, "Epic Store")
+                if resp.status == 429:
+                    raise RateLimitExceeded("Epic Store")
+                if resp.status == 403:
+                    raise AccessDenied("Epic Store", resp.status)
                 if resp.status != 200:
-                    logger.warning(f"Epic Store page returned {resp.status} for {slug}")
-                    return None
+                    raise APIError("Epic Store", resp.status)
+
                 html = await resp.text()
 
             soup = BeautifulSoup(html, "html.parser")
@@ -113,9 +136,13 @@ class EpicAPIManager:
                 "price_info": price_str,
             }
 
+        except aiohttp.ClientError as e:
+            raise NetworkError(f"Epic Store connection failed: {e}", e) from e
+        except (GameNotFound, RateLimitExceeded, AccessDenied, APIError):
+            raise
         except Exception as e:
             logger.error(f"Error scraping Epic Store page for {slug}: {e}")
-            return None
+            raise ScrapingError("Epic Store", slug, str(e)) from e
 
     def _parse_api_data(self, data: dict, is_free: bool) -> dict:
         parsed = {

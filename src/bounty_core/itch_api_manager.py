@@ -5,6 +5,14 @@ import re
 import aiohttp
 from bs4 import BeautifulSoup
 
+from bounty_core.exceptions import (
+    AccessDenied,
+    APIError,
+    GameNotFound,
+    NetworkError,
+    RateLimitExceeded,
+    ScrapingError,
+)
 from bounty_core.network import HEADERS
 from bounty_core.parser import extract_og_data
 
@@ -18,14 +26,24 @@ class ItchAPIManager:
     async def fetch_game_details(self, url: str) -> dict | None:
         try:
             async with self.session.get(url, headers=HEADERS) as resp:
+                if resp.status == 404:
+                    raise GameNotFound(url, "Itch.io")
+                if resp.status == 429:
+                    raise RateLimitExceeded("Itch.io")
+                if resp.status == 403:
+                    raise AccessDenied("Itch.io", resp.status)
                 if resp.status != 200:
-                    logger.warning(f"Itch.io returned {resp.status} for {url}")
-                    return None
+                    raise APIError("Itch.io", resp.status)
+
                 text = await resp.text()
                 return self._parse_html(text, url)
+        except aiohttp.ClientError as e:
+            raise NetworkError(f"Itch.io connection failed: {e}", e) from e
+        except (GameNotFound, RateLimitExceeded, AccessDenied, APIError):
+            raise
         except Exception as e:
             logger.error(f"Error fetching itch.io details for {url}: {e}")
-            return None
+            raise ScrapingError("Itch.io", url, str(e)) from e
 
     def _parse_html(self, html: str, url: str) -> dict:
         soup = BeautifulSoup(html, "html.parser")

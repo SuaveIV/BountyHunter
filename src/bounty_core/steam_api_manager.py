@@ -4,6 +4,13 @@ import time
 
 import aiohttp
 
+from bounty_core.exceptions import (
+    AccessDenied,
+    APIError,
+    GameNotFound,
+    NetworkError,
+    RateLimitExceeded,
+)
 from bounty_core.network import HEADERS
 
 logger = logging.getLogger(__name__)
@@ -29,18 +36,44 @@ class SteamAPIManager:
         try:
             async with self.session.get(url, params=params, headers=HEADERS) as resp:
                 if resp.status == 429:
-                    logger.warning(f"Steam API Rate Limit hit for {appid}. Backing off.")
-                    await asyncio.sleep(10)
-                    return None
+                    logger.warning(f"Steam API Rate Limit hit for {appid}.")
+                    # Steam doesn't always send Retry-After, assume 60s if hitting 429
+                    retry_after = 60.0
+                    if "Retry-After" in resp.headers:
+                        try:
+                            retry_after = float(resp.headers["Retry-After"])
+                        except ValueError:
+                            pass
+                    raise RateLimitExceeded("Steam", retry_after=retry_after)
+
+                if resp.status == 403 or resp.status == 401:
+                    raise AccessDenied("Steam", resp.status)
+
+                if resp.status != 200:
+                    raise APIError("Steam", resp.status, await resp.text())
 
                 data = await resp.json()
-                if data and str(appid) in data and data[str(appid)]["success"]:
-                    result = self._parse_store_data(data[str(appid)]["data"])
-                    result["store_url"] = f"https://store.steampowered.com/app/{appid}/"
-                    return result
+
+                # Steam API returns 200 even if app doesn't exist, checking "success" flag
+                if not data or str(appid) not in data:
+                    raise APIError("Steam", 200, "Invalid JSON structure")
+
+                app_data = data[str(appid)]
+                if not app_data.get("success"):
+                    # This is effectively a 404
+                    raise GameNotFound(appid, "Steam")
+
+                result = self._parse_store_data(app_data["data"])
+                result["store_url"] = f"https://store.steampowered.com/app/{appid}/"
+                return result
+
+        except aiohttp.ClientError as e:
+            raise NetworkError(f"Steam connection failed: {e}", e) from e
+        except (RateLimitExceeded, AccessDenied, GameNotFound, APIError):
+            raise
         except Exception as e:
-            logger.error(f"Exception fetching steam details for {appid}: {e}")
-        return None
+            logger.error(f"Unexpected exception fetching steam details for {appid}: {e}")
+            raise APIError("Steam", message=str(e)) from e
 
     def _parse_store_data(self, game_info: dict) -> dict:
         parsed_info = {
