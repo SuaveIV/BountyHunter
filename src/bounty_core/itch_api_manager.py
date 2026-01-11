@@ -15,6 +15,7 @@ from bounty_core.exceptions import (
 )
 from bounty_core.network import HEADERS
 from bounty_core.parser import extract_og_data
+from bounty_core.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +23,11 @@ logger = logging.getLogger(__name__)
 class ItchAPIManager:
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
+        # Itch.io is sensitive to scraping. 1 request per 2 seconds is polite.
+        self.rate_limiter = RateLimiter(calls_per_second=0.5)
 
     async def fetch_game_details(self, url: str) -> dict | None:
+        await self.rate_limiter.acquire()
         try:
             async with self.session.get(url, headers=HEADERS) as resp:
                 if resp.status == 404:

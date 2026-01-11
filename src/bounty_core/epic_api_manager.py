@@ -15,6 +15,7 @@ from bounty_core.exceptions import (
 )
 from bounty_core.network import HEADERS
 from bounty_core.parser import extract_og_data
+from bounty_core.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,9 @@ class EpicAPIManager:
         self.free_games_cache: list[dict[str, Any]] = []
         self.last_free_games_fetch = 0
         self.cache_duration = 300  # 5 minutes
+        # Epic is generally robust, but scraping too fast can trigger WAF.
+        # 1 request per second is safe.
+        self.rate_limiter = RateLimiter(calls_per_second=1.0)
 
     async def _ensure_free_games_cache(self):
         """
@@ -53,6 +57,8 @@ class EpicAPIManager:
         Fetches product details. Tries the CMS API first, then falls back to HTML scraping.
         Raises BountyException subclasses on failure.
         """
+        await self.rate_limiter.acquire()
+
         # 1. Try CMS API
         cms_url = f"https://store-content.ak.epicgames.com/api/en-US/content/products/{slug}"
         try:
@@ -85,6 +91,8 @@ class EpicAPIManager:
         return False
 
     async def _scrape_store_page(self, slug: str) -> dict | None:
+        await self.rate_limiter.acquire()
+
         url = f"https://store.epicgames.com/en-US/p/{slug}"
         try:
             async with self.session.get(url, headers=HEADERS) as resp:

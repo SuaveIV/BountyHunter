@@ -19,7 +19,7 @@ This document outlines the roadmap for improving the BountyHunter codebase, focu
 ### Phase 3: Performance & Reliability (Medium Priority)
 
 * [x] Database Pooling: Implement a connection pool (e.g., using `aiosqlite` or `sqlalchemy` with pooling) to handle concurrent database requests efficiently. (Migrated to SQLAlchemy Async).
-* **Rate Limiting & Caching**: Abstract the rate limiting logic from `SteamAPIManager` into a decorator or base class and apply it to Epic and Itch managers. Make cache TTL configurable.
+* [x] Rate Limiting & Caching: Abstract the rate limiting logic from `SteamAPIManager` into a decorator or base class and apply it to Epic and Itch managers. (Implemented `RateLimiter` class).
 
 ### Phase 4: Testing & Documentation (Low Priority)
 

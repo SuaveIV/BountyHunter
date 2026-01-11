@@ -1,6 +1,4 @@
-import asyncio
 import logging
-import time
 
 import aiohttp
 
@@ -12,6 +10,7 @@ from bounty_core.exceptions import (
     RateLimitExceeded,
 )
 from bounty_core.network import HEADERS
+from bounty_core.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -19,19 +18,15 @@ logger = logging.getLogger(__name__)
 class SteamAPIManager:
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
-        self.last_call = 0
-        self.rate_limit_delay = 1.5  # Conservative delay to avoid 429s
+        # Steam allows ~200 requests per 5 minutes -> ~0.66 req/s.
+        # We'll be conservative with 0.5 req/s (1 request every 2 seconds)
+        self.rate_limiter = RateLimiter(calls_per_second=0.5)
 
     async def fetch_app_details(self, appid: str) -> dict | None:
         url = "https://store.steampowered.com/api/appdetails"
         params = {"appids": appid, "cc": "us", "l": "en"}
 
-        # Simple leaky bucket
-        now = time.time()
-        if now - self.last_call < self.rate_limit_delay:
-            await asyncio.sleep(self.rate_limit_delay - (now - self.last_call))
-
-        self.last_call = time.time()
+        await self.rate_limiter.acquire()
 
         try:
             async with self.session.get(url, params=params, headers=HEADERS) as resp:
