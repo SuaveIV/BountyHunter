@@ -33,6 +33,7 @@ class SectorVisor(commands.Cog):
         self.scheduled_check.cancel()
 
     async def _send_admin_dm(self, message: str):
+        """Sends a direct message to the admin user (defined in config) with the given message."""
         if not ADMIN_DISCORD_ID:
             return
         try:
@@ -46,6 +47,10 @@ class SectorVisor(commands.Cog):
             logger.error("Failed to send admin DM: %s", e)
 
     async def _process_feed(self, manual: bool = False):
+        """
+        Scans the configured feed for new items.
+        If new items are found, triggers the announcement workflow.
+        """
         try:
             # Access scanner from bot instance
             new_announcements = await self.bot.scanner.scan()
@@ -68,6 +73,10 @@ class SectorVisor(commands.Cog):
             await self._send_admin_dm(str(e))
 
     async def _announce_new(self, items: list[tuple[str, dict[str, Any]]], manual: bool = False):
+        """
+        Iterates through new items, resolves their details, and sends announcements
+        to all subscribed channels.
+        """
         if not items:
             return
         subs = await self.bot.store.get_subscriptions()
@@ -115,6 +124,10 @@ class SectorVisor(commands.Cog):
     # Scheduled task
     @tasks.loop(time=[datetime.time(hour=h, minute=m, tzinfo=datetime.UTC) for h in range(24) for m in (0, 30)])
     async def scheduled_check(self):
+        """
+        Background task that runs the feed check on a schedule (every 30 mins).
+        Adds a random jitter to prevent server load spikes.
+        """
         # Add a small random delay (jitter) to avoid exact-time spikes
         await asyncio.sleep(random.uniform(1, 10))
         await self._process_feed(manual=False)

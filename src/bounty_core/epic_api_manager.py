@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class EpicAPIManager:
+    """
+    Manages interactions with the Epic Games Store.
+    Combines CMS API calls with HTML scraping as a fallback.
+    Tracks currently free games via the Promotions API.
+    """
+
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
         self.free_games_cache: list[dict[str, Any]] = []

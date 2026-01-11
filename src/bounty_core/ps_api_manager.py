@@ -27,7 +27,15 @@ class PSAPIManager:
         self.session = session
 
     async def fetch_game_details(self, url: str) -> dict | None:
-        """Fetches the page content and returns parsed game data."""
+        """
+        Fetches the PlayStation Store page and extracts details.
+
+        Args:
+            url: The full URL to the product page.
+
+        Returns:
+            A dictionary containing game details, or None.
+        """
         try:
             async with self.session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                 if resp.status == 404:

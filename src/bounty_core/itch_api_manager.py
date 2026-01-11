@@ -21,12 +21,29 @@ logger = logging.getLogger(__name__)
 
 
 class ItchAPIManager:
+    """
+    Manages fetching and parsing game details from itch.io.
+    Primarily uses HTML scraping as there is no public store API for this data.
+    """
+
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
         # Itch.io is sensitive to scraping. 1 request per 2 seconds is polite.
         self.rate_limiter = RateLimiter(calls_per_second=0.5)
 
     async def fetch_game_details(self, url: str) -> dict | None:
+        """
+        Fetches the game page and extracts details via scraping.
+
+        Args:
+            url: The full URL to the itch.io game page.
+
+        Returns:
+            A dictionary containing game details, or None on failure.
+
+        Raises:
+            BountyException subclasses on error (RateLimit, NotFound, etc).
+        """
         await self.rate_limiter.acquire()
         try:
             async with self.session.get(url, headers=HEADERS) as resp:

@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class SteamAPIManager:
+    """
+    Manages interactions with the Steam Store API.
+    Handles rate limiting, connection errors, and response parsing.
+    """
+
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
         # Steam allows ~200 requests per 5 minutes -> ~0.66 req/s.
@@ -23,6 +28,22 @@ class SteamAPIManager:
         self.rate_limiter = RateLimiter(calls_per_second=0.5)
 
     async def fetch_app_details(self, appid: str) -> dict | None:
+        """
+        Fetches details for a specific Steam App ID.
+
+        Args:
+            appid: The Steam App ID (e.g., "400").
+
+        Returns:
+            A dictionary containing standardized game details, or None if failed.
+
+        Raises:
+            RateLimitExceeded: If the API rate limit is hit.
+            GameNotFound: If the app ID is invalid or not found.
+            AccessDenied: If the API returns 403/401.
+            APIError: For other non-200 responses or malformed data.
+            NetworkError: For connection issues.
+        """
         url = "https://store.steampowered.com/api/appdetails"
         params = {"appids": appid, "cc": "us", "l": "en"}
 

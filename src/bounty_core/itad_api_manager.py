@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class ItadAPIManager:
+    """
+    Manages interactions with the IsThereAnyDeal API (v1/v2).
+    Used for price checking and metadata enhancement.
+    """
+
     BASE_URL = "https://api.isthereanydeal.com"
 
     def __init__(self, session: aiohttp.ClientSession, api_key: str):

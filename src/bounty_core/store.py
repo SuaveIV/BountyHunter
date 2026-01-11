@@ -9,6 +9,13 @@ from bounty_core.db.models import GameCache, SeenPost, Subscription
 
 
 class Store:
+    """
+    Data access layer for BountyHunter.
+
+    Uses SQLAlchemy (Async) with an underlying SQLite database (in WAL mode).
+    Manages caching of game details, seen posts tracking, and user subscriptions.
+    """
+
     def __init__(self, db: Database):
         self.db = db
 
