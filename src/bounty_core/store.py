@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from typing import cast
+from typing import Any, cast
 
 import aiosqlite
 
@@ -108,7 +108,7 @@ class Store:
             )
             await db.commit()
 
-    async def get_cached_game_details(self, appid: str) -> dict | None:
+    async def get_cached_game_details(self, appid: str) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("SELECT data FROM steam_app_cache WHERE appid = ?", (appid,)) as cursor:
                 row = await cursor.fetchone()
@@ -122,7 +122,7 @@ class Store:
             )
             await db.commit()
 
-    async def get_cached_epic_details(self, slug: str) -> dict | None:
+    async def get_cached_epic_details(self, slug: str) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("SELECT data FROM epic_app_cache WHERE slug = ?", (slug,)) as cursor:
                 row = await cursor.fetchone()
@@ -136,7 +136,7 @@ class Store:
             )
             await db.commit()
 
-    async def get_cached_itch_details(self, url: str) -> dict | None:
+    async def get_cached_itch_details(self, url: str) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("SELECT data FROM itch_game_cache WHERE url = ?", (url,)) as cursor:
                 row = await cursor.fetchone()
@@ -150,7 +150,7 @@ class Store:
             )
             await db.commit()
 
-    async def get_cached_ps_details(self, url: str) -> dict | None:
+    async def get_cached_ps_details(self, url: str) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute("SELECT data FROM ps_game_cache WHERE url = ?", (url,)) as cursor:
                 row = await cursor.fetchone()
