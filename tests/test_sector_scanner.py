@@ -105,3 +105,38 @@ async def test_sector_scanner_skip_seen():
 
     assert len(results) == 0
     mock_store.mark_post_seen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sector_scanner_mobile_epic():
+    mock_fetcher = MagicMock()
+    mock_fetcher.fetch_latest = AsyncMock(
+        return_value=[
+            {
+                "id": "mobile_post",
+                "title": "Epic Mobile Games",
+                "url": "https://reddit.com/r/freegamefindings/mobile",
+                "external_url": "https://store.epicgames.com/p/bouncemasters-android-ebc0b1",
+                "thumbnail": None,
+            }
+        ]
+    )
+
+    # Mock more links in the search blob (simulating body text)
+    # The scan logic uses search_blob = text + " " + " ".join(valid_links)
+    # To test multiple links, we need them in the fetcher result or simulate text containing them.
+    # Actually, scan() only takes external_url and reddit_url.
+    # If we want to test multiple links, we'd need them in the title or a more complex fetcher.
+    # For now, let's just test that the one link is categorized as Android.
+
+    mock_store = MagicMock()
+    mock_store.is_post_seen = AsyncMock(return_value=False)
+    mock_store.mark_post_seen = AsyncMock()
+
+    scanner = SectorScanner(mock_fetcher, mock_store)
+    results = await scanner.scan()
+
+    assert len(results) == 1
+    _, parsed = results[0]
+    assert parsed["epic_mobile_links"]["Android"] == "https://store.epicgames.com/p/bouncemasters-android-ebc0b1"
+    assert "bouncemasters-android-ebc0b1" in parsed["epic_slugs"]

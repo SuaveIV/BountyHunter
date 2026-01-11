@@ -118,6 +118,12 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
         if details.get("image"):
             embed.set_image(url=details["image"])
 
+        # Add Mobile Links if detected
+        mobile_links = parsed.get("epic_mobile_links", {})
+        if mobile_links:
+            links_str = " | ".join([f"[{k}]({v})" for k, v in mobile_links.items()])
+            embed.add_field(name="📱 Mobile Versions", value=links_str, inline=False)
+
     elif is_itch:
         embed.color = discord.Color.from_str("#FA5C5C")  # Itch Pink
         embed.description = "Claim this game for free on Itch.io!"

@@ -76,6 +76,16 @@ class SectorScanner:
                     ps_urls = extract_ps_urls(search_blob)
                     gog_urls = extract_gog_urls(search_blob)
 
+                    # Identify Mobile Variants in Epic Links
+                    epic_mobile_links = {}
+                    for link in valid_links:
+                        if "store.epicgames.com" in link:
+                            link_lower = link.lower()
+                            if "-android-" in link_lower:
+                                epic_mobile_links["Android"] = link
+                            elif "-ios-" in link_lower:
+                                epic_mobile_links["iOS"] = link
+
                     parsed = {
                         "uri": uri,
                         "text": text,
@@ -84,6 +94,7 @@ class SectorScanner:
                         "source_links": list(source_links),
                         "steam_app_ids": list(steam_ids),
                         "epic_slugs": list(epic_slugs),
+                        "epic_mobile_links": epic_mobile_links,
                         "itch_urls": list(itch_urls),
                         "ps_urls": list(ps_urls),
                         "gog_urls": list(gog_urls),
