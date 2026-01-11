@@ -1,5 +1,7 @@
 import re
 
+from bs4 import BeautifulSoup
+
 from .constants import DENY_DOMAINS
 
 STEAM_APP_REGEX = re.compile(r"store\.steampowered\.com/app/(\d+)")
@@ -71,3 +73,31 @@ def extract_ps_urls(text: str) -> set[str]:
 def is_safe_link(url: str) -> bool:
     """Filters out known spam/raffle domains."""
     return not any(domain in url for domain in DENY_DOMAINS)
+
+
+def extract_og_data(soup: BeautifulSoup) -> dict[str, str | None]:
+    """
+    Extracts Open Graph title and image from a BeautifulSoup object.
+    Handles potential list content in meta tags.
+    """
+    data: dict[str, str | None] = {"title": None, "image": None}
+
+    # Extract Title
+    og_title = soup.find("meta", property="og:title")
+    if og_title:
+        content = og_title.get("content")
+        if isinstance(content, str):
+            data["title"] = content
+        elif isinstance(content, list) and content and isinstance(content[0], str):
+            data["title"] = content[0]
+
+    # Extract Image
+    og_image = soup.find("meta", property="og:image")
+    if og_image:
+        content = og_image.get("content")
+        if isinstance(content, str):
+            data["image"] = content
+        elif isinstance(content, list) and content and isinstance(content[0], str):
+            data["image"] = content[0]
+
+    return data

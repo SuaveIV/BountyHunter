@@ -6,6 +6,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from bounty_core.network import HEADERS
+from bounty_core.parser import extract_og_data
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +68,9 @@ class ItchAPIManager:
                     logger.warning(f"Failed to parse JSON-LD for {url}: {e}")
 
         # 2. Fallback: BS4 Scraping
-        name = "Unknown Itch Game"
-        og_title = soup.find("meta", property="og:title")
-        if og_title and og_title.get("content"):
-            name = og_title["content"]
-
-        image = None
-        og_image = soup.find("meta", property="og:image")
-        if og_image and og_image.get("content"):
-            image = og_image["content"]
+        og_data = extract_og_data(soup)
+        name = og_data["title"] or "Unknown Itch Game"
+        image = og_data["image"]
 
         # Developer from URL (subdomain)
         dev_match = re.search(r"https?://([^\.]+)\.itch\.io", url)

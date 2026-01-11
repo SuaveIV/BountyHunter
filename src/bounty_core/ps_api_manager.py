@@ -5,6 +5,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from bounty_core.network import HEADERS
+from bounty_core.parser import extract_og_data
 
 logger = logging.getLogger(__name__)
 
@@ -34,21 +35,14 @@ class PSAPIManager:
         """Extracts name, image, and price from the HTML body."""
         soup = BeautifulSoup(html, "html.parser")
 
-        # 1. Name Extraction (Open Graph Title)
-        name = "Unknown PS Game"
-        og_title = soup.find("meta", property="og:title")
-        if og_title and og_title.get("content"):
-            content = og_title["content"]
-            # Handle both single string and list cases
-            title_text = content[0] if isinstance(content, list) else content
-            name = title_text.replace(" | PlayStation Store", "").strip()
+        # 1. Open Graph Extraction
+        og_data = extract_og_data(soup)
 
-        # 2. Image Extraction (Open Graph Image)
-        image = None
-        og_image = soup.find("meta", property="og:image")
-        if og_image and og_image.get("content"):
-            content = og_image["content"]
-            image = content[0] if isinstance(content, list) else content
+        name = "Unknown PS Game"
+        if og_data["title"]:
+            name = og_data["title"].replace(" | PlayStation Store", "").strip()
+
+        image = og_data["image"]
 
         # 3. Price & Is Free (JSON-LD Parsing)
         is_free = False

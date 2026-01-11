@@ -6,6 +6,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from bounty_core.network import HEADERS
+from bounty_core.parser import extract_og_data
 
 logger = logging.getLogger(__name__)
 
@@ -77,21 +78,14 @@ class EpicAPIManager:
 
             soup = BeautifulSoup(html, "html.parser")
 
-            # Name
-            name = "Unknown Epic Game"
-            og_title = soup.find("meta", property="og:title")
-            if og_title and og_title.get("content"):
-                content = og_title["content"]
-                if isinstance(content, str):
-                    name = content.replace(" | Download and Buy Today - Epic Games Store", "").strip()
-                elif isinstance(content, list) and content and isinstance(content[0], str):
-                    name = content[0].replace(" | Download and Buy Today - Epic Games Store", "").strip()
+            # Extract Name and Image via shared helper
+            og_data = extract_og_data(soup)
 
-            # Image
-            image = None
-            og_image = soup.find("meta", property="og:image")
-            if og_image and og_image.get("content"):
-                image = og_image["content"]
+            name = "Unknown Epic Game"
+            if og_data["title"]:
+                name = og_data["title"].replace(" | Download and Buy Today - Epic Games Store", "").strip()
+
+            image = og_data["image"]
 
             # Price / Free status
             # Check for "Free" text or "Download" button
