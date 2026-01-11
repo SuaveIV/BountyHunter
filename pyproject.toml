@@ -13,6 +13,7 @@ dependencies = [
     "feedparser>=6.0.12",
     "colorama>=0.4.6",
     "pydantic>=2.12.5",
+    "sqlalchemy>=2.0.45",
 ]
 
 [project.optional-dependencies]

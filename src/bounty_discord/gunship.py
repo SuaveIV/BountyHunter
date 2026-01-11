@@ -3,6 +3,7 @@ import logging
 import aiohttp
 from discord.ext import commands
 
+from bounty_core.db.engine import Database
 from bounty_core.epic_api_manager import EpicAPIManager
 from bounty_core.fetcher import RedditRSSFetcher
 from bounty_core.itad_api_manager import ItadAPIManager
@@ -27,7 +28,10 @@ class Gunship(commands.Bot):
         super().__init__(*args, **kwargs)
 
         # Initialize Shared Resources
-        self.store = Store(DATABASE_PATH)
+        # Ensure URL is valid for SQLAlchemy (sqlite+aiosqlite)
+        db_url = f"sqlite+aiosqlite:///{DATABASE_PATH}"
+        self.db = Database(db_url)
+        self.store = Store(self.db)
         self._http_session = None
 
         # Managers placeholders (init in setup_hook or async context preferred,
@@ -51,6 +55,9 @@ class Gunship(commands.Bot):
         self.discord_log_handler = None
 
     async def setup_hook(self):
+        # Setup DB (Connect & Create Tables)
+        await self.store.setup()
+
         # Setup Critical Error Logging to DM
         self.discord_log_handler = DiscordLoggingHandler(self)
         self.discord_log_handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
@@ -75,6 +82,9 @@ class Gunship(commands.Bot):
             logger.warning("ADMIN_DISCORD_ID is not set. Admin commands and error DMs will be disabled.")
 
     async def close(self):
+        if self.store:
+            await self.store.close()
+
         if self.discord_log_handler:
             logging.getLogger().removeHandler(self.discord_log_handler)
 

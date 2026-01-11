@@ -2,6 +2,7 @@ import aiohttp
 import pytest_asyncio
 from dotenv import load_dotenv
 
+from bounty_core.db.engine import Database
 from bounty_core.store import Store
 
 load_dotenv()
@@ -17,6 +18,8 @@ async def session():
 async def store(tmp_path):
     # Use a temporary database file for tests
     db_path = tmp_path / "test_bounty.db"
-    store = Store(str(db_path))
+    db_url = f"sqlite+aiosqlite:///{db_path}"
+    db = Database(db_url)
+    store = Store(db)
     await store.setup()
     return store

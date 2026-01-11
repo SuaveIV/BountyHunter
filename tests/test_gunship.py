@@ -20,6 +20,7 @@ async def test_gunship_initialization():
             patch("bounty_discord.gunship.ItadAPIManager"),
             patch("bounty_discord.gunship.SectorScanner"),
             patch("bounty_discord.gunship.Store"),
+            patch("bounty_discord.gunship.Database"),
         ):
             intents = discord.Intents.default()
             bot = Gunship(command_prefix="!", intents=intents)
@@ -44,8 +45,13 @@ async def test_gunship_setup_hook():
             patch("bounty_discord.gunship.PSAPIManager"),
             patch("bounty_discord.gunship.ItadAPIManager"),
             patch("bounty_discord.gunship.SectorScanner"),
-            patch("bounty_discord.gunship.Store"),
+            patch("bounty_discord.gunship.Store") as MockStore,
+            patch("bounty_discord.gunship.Database"),
         ):
+            # Configure Store mock to support await setup()
+            mock_store_instance = MockStore.return_value
+            mock_store_instance.setup = AsyncMock()
+
             bot = Gunship(command_prefix="!", intents=discord.Intents.default())
 
             # Mock load_extension to verify it's called
@@ -54,6 +60,9 @@ async def test_gunship_setup_hook():
             # Mock logging handler setup
             with patch("logging.getLogger"):
                 await bot.setup_hook()
+
+            # Verify store setup was called
+            mock_store_instance.setup.assert_awaited_once()
 
             # Verify extensions are loaded
             expected_extensions = [
