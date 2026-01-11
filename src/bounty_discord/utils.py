@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 
 from bounty_core.epic import get_game_details as get_epic_details
+from bounty_core.exceptions import AccessDenied, BountyException
 from bounty_core.fetcher import TARGET_ACTOR
 from bounty_core.gog import get_game_details as get_gog_details
 from bounty_core.itch import get_game_details as get_itch_details
@@ -231,16 +232,23 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
     gog_urls = parsed.get("gog_urls", [])
 
     details = None
-    if steam_ids and getattr(bot_any, "steam_manager", None):
-        details = await get_steam_details(steam_ids[0], bot_any.steam_manager, bot_any.store)
-    elif epic_slugs and getattr(bot_any, "epic_manager", None):
-        details = await get_epic_details(epic_slugs[0], bot_any.epic_manager, bot_any.store)
-    elif itch_urls and getattr(bot_any, "itch_manager", None):
-        details = await get_itch_details(itch_urls[0], bot_any.itch_manager, bot_any.store)
-    elif ps_urls and getattr(bot_any, "ps_manager", None):
-        details = await get_ps_details(ps_urls[0], bot_any.ps_manager, bot_any.store)
-    elif gog_urls and getattr(bot_any, "gog_manager", None):
-        details = await get_gog_details(gog_urls[0], bot_any.gog_manager, bot_any.store)
+    try:
+        if steam_ids and getattr(bot_any, "steam_manager", None):
+            details = await get_steam_details(steam_ids[0], bot_any.steam_manager, bot_any.store)
+        elif epic_slugs and getattr(bot_any, "epic_manager", None):
+            details = await get_epic_details(epic_slugs[0], bot_any.epic_manager, bot_any.store)
+        elif itch_urls and getattr(bot_any, "itch_manager", None):
+            details = await get_itch_details(itch_urls[0], bot_any.itch_manager, bot_any.store)
+        elif ps_urls and getattr(bot_any, "ps_manager", None):
+            details = await get_ps_details(ps_urls[0], bot_any.ps_manager, bot_any.store)
+        elif gog_urls and getattr(bot_any, "gog_manager", None):
+            details = await get_gog_details(gog_urls[0], bot_any.gog_manager, bot_any.store)
+    except AccessDenied as e:
+        logger.warning(f"Access denied ({e.store}) for item '{parsed.get('title')}': {e}. Falling back.")
+    except BountyException as e:
+        logger.warning(f"Error resolving details ({type(e).__name__}): {e}. Falling back.")
+    except Exception as e:
+        logger.exception(f"Unexpected error in resolve_game_details: {e}")
 
     # Universal Fallback: Use ITAD if primary store failed
     if not details and getattr(bot_any, "itad_manager", None):
