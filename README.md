@@ -1,16 +1,16 @@
 # BountyHunter — Free Games Scout
 
-A Discord bot that automatically monitors Bluesky for free game announcements and posts them to your Discord server. Supports multiple game stores including Steam, Epic Games Store, itch.io, PlayStation Store, GOG, and Amazon Prime Gaming.
+A Discord bot that automatically monitors Reddit for free game announcements and posts them to your Discord server. Supports multiple game stores including Steam, Epic Games Store, itch.io, PlayStation Store, GOG, and Amazon Prime Gaming.
 
 ## Features
 
 - 🎮 **Multi-platform game tracking**: Steam, Epic Games Store, itch.io, PlayStation Store, GOG, and Amazon Prime Gaming.
-- 📱 **Automatic Bluesky feed monitoring**: Tracks [@freegamefindings.bsky.social](https://bsky.app/profile/freegamefindings.bsky.social) for the latest deals.
+- 📱 **Automatic Reddit monitoring**: Tracks [r/FreeGameFindings](https://www.reddit.com/r/FreeGameFindings/) via RSS for the latest deals.
 - 💰 **Price Checking**: Check game prices and historical lows using IsThereAnyDeal (`!price`).
-- 💾 **Persistent Storage**: SQLite-backed storage with intelligent caching to prevent duplicate posts.
+- 💾 **Pooled Storage**: SQLAlchemy-backed storage with connection pooling and WAL mode for high reliability.
 - 🔔 **Smart Notifications**: Per-server channel subscriptions with optional role pings.
-- 🔗 **Rich Content**: Expands Reddit posts and generates detailed embeds with game info, images, and pricing.
-- ⚙️ **Configurable**: Adjustable polling intervals and extensive admin controls.
+- 🔗 **Rich Content**: Expands external links and generates detailed embeds with game info, images, and pricing.
+- ⚙️ **Robust Architecture**: Built-in rate limiting, standardized error handling, and 100% type safety.
 
 ## Commands
 
@@ -34,7 +34,7 @@ A Discord bot that automatically monitors Bluesky for free game announcements an
 - `!test_embed_itch <url>` — Generate a test embed for an itch.io URL.
 - `!test_embed_ps <url>` — Generate a test embed for a PlayStation Store URL.
 - `!test_embed_url <url> [text]` — Generate a test embed for any generic URL (GOG, Amazon, Stove, etc.).
-- `!test_scraper` — Test the Bluesky feed fetcher.
+- `!test_scraper` — Test the Reddit RSS feed fetcher.
 
 ## Requirements
 
@@ -49,10 +49,10 @@ This project uses [`mise`](https://mise.jdx.dev/) and [`uv`](https://github.com/
 
 ### 1. Environment Variables
 
-Create a `.env` file based on `.env.template`:
+Create a `.env` file based on `.env.example`:
 
 ```bash
-cp .env.template .env
+cp .env.example .env
 ```
 
 - **BOT_TOKEN** (required) — Your Discord bot token.
@@ -80,10 +80,9 @@ just run
 
 ## Development
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for architectural details and coding standards.
+
 - **Run Tests**: `just test`
-- **Lint Code**: `just lint`
-- **Format Code**: `just format`
-- **Check Types**: `just type-check`
 - **Full Check**: `just check` (runs lint, format-check, type-check, and tests)
 
 ## Docker
