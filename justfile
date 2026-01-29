@@ -140,6 +140,16 @@ format-check:
     @echo "🔍 Checking code formatting..."
     mise exec -- uv run ruff format --check .
 
+# Format markdown files
+format-md:
+    @echo "✨ Formatting markdown with mdformat..."
+    mise exec -- uv run mdformat .
+
+# Check markdown formatting
+format-md-check:
+    @echo "🔍 Checking markdown formatting..."
+    mise exec -- uv run mdformat --check .
+
 # Run static type checking
 type-check:
     @echo "🧐 Running pyright type checker..."
@@ -151,11 +161,11 @@ type-check-file path:
     mise exec -- uv run pyright {{path}}
 
 # Run all code quality checks
-check: lint format-check type-check test
+check: lint format-check format-md-check type-check test
     @echo "✅ All code quality checks passed!"
 
 # Fix and format all code issues
-fix: lint-fix format
+fix: lint-fix format format-md
     @echo "✅ Code fixed and formatted!"
 
 # Run security checks (requires bandit or similar)
