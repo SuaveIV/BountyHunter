@@ -45,7 +45,7 @@ class RedditRSSFetcher:
                         return posts
 
                     if resp.status == 429 or 500 <= resp.status < 600:
-                        delay = BASE_DELAY * (2**attempt) + random.uniform(0, 1)
+                        delay = BASE_DELAY * (2**attempt) + random.uniform(0, 1)  # nosec B311
                         logger.warning(f"Reddit RSS fetch failed ({resp.status}). Retrying in {delay:.2f}s...")
                         await asyncio.sleep(delay)
                         continue
@@ -53,7 +53,7 @@ class RedditRSSFetcher:
                     logger.error(f"Reddit RSS fetch failed: {resp.status}")
                     return []
             except Exception as e:
-                delay = BASE_DELAY * (2**attempt) + random.uniform(0, 1)
+                delay = BASE_DELAY * (2**attempt) + random.uniform(0, 1)  # nosec B311
                 logger.error(f"Exception fetching Reddit RSS: {e}. Retrying in {delay:.2f}s...")
                 await asyncio.sleep(delay)
 

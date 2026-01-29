@@ -21,8 +21,8 @@ class DiscordLoggingHandler(logging.Handler):
         try:
             log_entry = self.format(record)
             self.bot.loop.create_task(self.send_dm(log_entry))
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error in DiscordLoggingHandler.emit: {e}", file=sys.stderr)  # nosec B110
 
     async def send_dm(self, message):
         if not ADMIN_DISCORD_ID:
@@ -33,8 +33,8 @@ class DiscordLoggingHandler(logging.Handler):
                 if len(message) > 1900:
                     message = message[:1900] + "..."
                 await user.send(f"🚨 **CRITICAL ERROR** 🚨\n```\n{message}\n```")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error sending DM: {e}", file=sys.stderr)  # nosec B110
 
 
 class SensitiveDataFilter(logging.Filter):

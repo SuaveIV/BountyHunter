@@ -129,7 +129,7 @@ class SectorVisor(commands.Cog):
         Adds a random jitter to prevent server load spikes.
         """
         # Add a small random delay (jitter) to avoid exact-time spikes
-        await asyncio.sleep(random.uniform(1, 10))
+        await asyncio.sleep(random.uniform(1, 10))  # nosec B311
         await self._process_feed(manual=False)
 
     @scheduled_check.before_loop
