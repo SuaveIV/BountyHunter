@@ -28,12 +28,24 @@ This package runs the bot.
 
 ## Setup
 
-We use `uv`.
+We use `uv` for dependencies. You can install tools manually or use [mise](https://mise.jdx.dev) to manage them automatically.
+
+### Option 1: Using mise (Recommended)
+
+1. **Install mise**: [Getting Started](https://mise.jdx.dev/getting-started.html)
+2. **Install tools**: `mise install`
+3. **Sync**: `uv sync`
+
+### Option 2: Manual
 
 1. **Install uv**: [astral.sh/uv](https://astral.sh/uv).
-2. **Sync**: `uv sync`
-3. **Test**: `just test` (or `uv run pytest`)
-4. **Lint**: `just check` / `just fix`
+2. **Install Just** (optional, for task running): [just.systems](https://just.systems)
+3. **Sync**: `uv sync`
+
+### Running Tasks
+
+- **Test**: `just test` (or `uv run pytest`)
+- **Lint**: `just check` / `just fix`
 
 ## Standards
 
