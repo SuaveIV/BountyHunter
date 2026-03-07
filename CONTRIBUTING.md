@@ -33,14 +33,14 @@ We use `uv` for dependencies. You can install tools manually or use [mise](https
 ### Option 1: Using mise (Recommended)
 
 1. **Install mise**: [Getting Started](https://mise.jdx.dev/getting-started.html)
-2. **Install tools**: `mise install`
-3. **Sync**: `uv sync`
+1. **Install tools**: `mise install`
+1. **Sync**: `uv sync`
 
 ### Option 2: Manual
 
 1. **Install uv**: [astral.sh/uv](https://astral.sh/uv).
-2. **Install Just** (optional, for task running): [just.systems](https://just.systems)
-3. **Sync**: `uv sync`
+1. **Install Just** (optional, for task running): [just.systems](https://just.systems)
+1. **Sync**: `uv sync`
 
 ### Running Tasks
 
@@ -59,6 +59,6 @@ We use `uv` for dependencies. You can install tools manually or use [mise](https
 To add a store (e.g., GOG):
 
 1. Create `src/bounty_core/gog_api_manager.py` with the fetch logic.
-2. Add a wrapper in `src/bounty_core/gog.py` (optional, but consistent).
-3. Update `src/bounty_discord/utils.py:resolve_game_details` to handle the new store.
-4. Initialize the manager in `src/bounty_discord/gunship.py`.
+1. Add a wrapper in `src/bounty_core/gog.py` (optional, but consistent).
+1. Update `src/bounty_discord/utils.py:resolve_game_details` to handle the new store.
+1. Initialize the manager in `src/bounty_discord/gunship.py`.
