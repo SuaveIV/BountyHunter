@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import aiohttp
@@ -46,6 +47,9 @@ class Gunship(commands.Bot):
 
         # Logging Handler
         self.discord_log_handler = None
+
+        # Track bot start time for uptime calculation
+        self.start_time = datetime.datetime.now(datetime.UTC)
 
     async def setup_hook(self):
         # Create HTTP session for all API managers

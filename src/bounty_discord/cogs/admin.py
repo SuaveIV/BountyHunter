@@ -1,3 +1,4 @@
+import datetime  # noqa: F401
 import json
 from io import BytesIO
 from typing import Any
@@ -325,23 +326,22 @@ class Admin(commands.Cog):
     @is_admin_dm()
     async def status(self, ctx: commands.Context):
         """Show bot uptime and last check time (Admin DM only)."""
-        # Bot start time?
-        # We don't have start_time in Gunship.
-        # We should add start_time to Gunship __init__ or use ctx.bot.user.created_at (not accurate for uptime)
-        # Using process uptime or just add self.start_time to Gunship.
-        # Let's assume Gunship has start_time or we can't show uptime easily.
-        # I'll stick to last_check_time.
-        # But wait, Gunship doesn't have start_time initialized in my write_to_file call.
-        # I should probably just skip uptime or use a placeholder, or update Gunship.
-        # 'status' is useful. I'll check if I can get uptime from something else.
-        # Or I can just calculate it if I knew when it started.
-        # I'll omit uptime for now or add it later.
+        # Calculate uptime using bot start time
+        current_time = datetime.datetime.now(datetime.UTC)
+        uptime_delta = current_time - self.bot.start_time
+
+        # Format uptime as days/hours/minutes
+        total_seconds = int(uptime_delta.total_seconds())
+        days = total_seconds // 86400
+        hours = (total_seconds % 86400) // 3600
+        minutes = (total_seconds % 3600) // 60
+        uptime_str = f"{days}d {hours}h {minutes}m"
 
         last_check_time = getattr(self.bot, "last_check_time", None)
         last_check = f"<t:{int(last_check_time.timestamp())}:R>" if last_check_time else "Never"
 
         embed = discord.Embed(title="Bot Status", color=discord.Color.teal())
-        # embed.add_field(name="⏱️ Uptime", value=uptime_str, inline=True)
+        embed.add_field(name="⏱️ Uptime", value=uptime_str, inline=True)
         embed.add_field(name="🔄 Last Check", value=last_check, inline=True)
         await ctx.send(embed=embed)
 
