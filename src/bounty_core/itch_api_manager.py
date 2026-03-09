@@ -102,6 +102,10 @@ class ItchAPIManager:
                             "release_date": data.get("datePublished"),
                             "image": data.get("image"),
                             "price_info": "Free to Play" if is_free else f"{price} {currency}",
+                            # BUG FIX: store_url was missing from this path. Since JSON-LD is the
+                            # preferred path (most itch.io pages have it), embeds always fell through
+                            # to the generic branch — despite the BS4 fallback correctly including it.
+                            "store_url": url,
                         }
                 except Exception as e:
                     logger.warning(f"Failed to parse JSON-LD for {url}: {e}")
@@ -134,4 +138,5 @@ class ItchAPIManager:
             "release_date": None,
             "image": image,
             "price_info": price_str,
+            "store_url": url,
         }

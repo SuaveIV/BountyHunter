@@ -94,6 +94,8 @@ class SteamAPIManager:
     def _parse_store_data(self, game_info: dict) -> dict:
         parsed_info = {
             "name": game_info.get("name"),
+            # BUG FIX: short_description was never extracted, leaving Steam embeds with no description
+            "short_description": game_info.get("short_description"),
             "is_free": game_info.get("is_free"),
             "developers": game_info.get("developers", []),
             "publishers": game_info.get("publishers", []),

@@ -65,6 +65,8 @@ class EpicAPIManager:
         """
         await self.rate_limiter.acquire()
 
+        store_url = f"https://store.epicgames.com/en-US/p/{slug}"
+
         # 1. Try CMS API
         cms_url = f"https://store-content.ak.epicgames.com/api/en-US/content/products/{slug}"
         try:
@@ -73,7 +75,11 @@ class EpicAPIManager:
                     cms_data = await resp.json()
                     await self._ensure_free_games_cache()
                     is_free = self._check_is_free(slug)
-                    return self._parse_api_data(cms_data, is_free)
+                    result = self._parse_api_data(cms_data, is_free)
+                    # BUG FIX: store_url was never set, causing the embed store-detection
+                    # to fall through to the generic branch regardless of the game's platform.
+                    result["store_url"] = store_url
+                    return result
                 elif resp.status == 404:
                     # Not found in CMS, might still exist as a page to scrape
                     pass
@@ -125,16 +131,11 @@ class EpicAPIManager:
             image = og_data["image"]
 
             # Price / Free status
-            # Check for "Free" text or "Download" button
             is_free = False
             price_str = "Check Store"
 
             # Heuristic: Check if we can find "Free" in price areas
-            # This is hard to pinpoint without exact classes which change
-            # But usually "Free" is visible text.
             if soup.find(string="Free") or soup.find(string="Get"):
-                # "Get" button usually implies free or owned
-                # We can cross-reference with our free_games_cache
                 await self._ensure_free_games_cache()
                 if self._check_is_free(slug):
                     is_free = True
@@ -148,6 +149,8 @@ class EpicAPIManager:
                 "release_date": None,
                 "image": image,
                 "price_info": price_str,
+                # BUG FIX: store_url was missing from this path too
+                "store_url": url,
             }
 
         except aiohttp.ClientError as e:
@@ -159,6 +162,8 @@ class EpicAPIManager:
             raise ScrapingError("Epic Store", slug, str(e)) from e
 
     def _parse_api_data(self, data: dict, is_free: bool) -> dict:
+        # Note: store_url is intentionally NOT set here; it is set by the caller
+        # (fetch_product_details) which has access to the slug.
         parsed = {
             "name": data.get("productName") or data.get("_title"),
             "is_free": is_free,

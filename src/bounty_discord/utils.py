@@ -51,7 +51,11 @@ async def send_message(target, content=None, embed=None, silent=False):
 
 async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
     """Creates a rich embed for a game announcement, matching FamilyBot style."""
-    store_url = details.get("store_url", parsed.get("links", [""])[0])
+
+    # BUG FIX: parsed.get("links", [""])[0] would raise IndexError if "links" key
+    # exists but is an empty list. Use `or` to treat both missing and empty the same way.
+    links = parsed.get("links") or [""]
+    store_url = details.get("store_url") or links[0]
 
     # Determine store type
     is_steam = "store.steampowered.com" in store_url
@@ -73,7 +77,7 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
 
     embed = discord.Embed()
     embed.title = f"{title_prefix}: {details.get('name', 'Unknown Game')}"
-    embed.url = store_url
+    embed.url = store_url or None
 
     # Footer keeps BountyHunter branding but dynamic TARGET_ACTOR
     embed.set_footer(text=f"BountyHunter • Free Game Scout • {TARGET_ACTOR}")
@@ -167,7 +171,6 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
     else:
         # Fallback for generic sites
         embed.color = discord.Color.green()
-        # If description is not provided in details, use text
         embed.description = details.get("description") or parsed.get("text", "Free game announcement")
         if details.get("image"):
             embed.set_image(url=details["image"])
@@ -250,7 +253,7 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
         elif gog_urls and getattr(bot_any, "gog_manager", None):
             details = await get_gog_details(gog_urls[0], bot_any.gog_manager, bot_any.store)
     except AccessDenied as e:
-        logger.warning(f"Access denied ({e.store}) for item '{parsed.get('title')}': {e}. Falling back.")
+        logger.warning(f"Access denied ({e.store}) for item '{parsed.get('text')}': {e}. Falling back.")
     except BountyException as e:
         logger.warning(f"Error resolving details ({type(e).__name__}): {e}. Falling back.")
     except Exception as e:
@@ -261,7 +264,9 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
         details = await bot_any.itad_manager.find_game(
             steam_ids=list(steam_ids) if steam_ids else None,
             epic_slugs=list(epic_slugs) if epic_slugs else None,
-            title=parsed.get("title"),
+            # BUG FIX: parsed uses "text" as the key for the post title/content, not "title".
+            # This was always passing None to find_game, making the ITAD title fallback a no-op.
+            title=parsed.get("text"),
         )
 
     # Fallback: use generic details if specific manager didn't handle it
