@@ -22,5 +22,5 @@
         "Justfile": "just",
         "*.just": "just"
     },
-    "python.defaultInterpreterPath": "c:\\Users\\suave\\BountyHunter\\.venv\\Scripts\\python.exe"
+    "python.defaultInterpreterPath": "c:\\Users\\suave\\dev\\BountyHunter\\.venv\\Scripts\\python.exe"
 }
