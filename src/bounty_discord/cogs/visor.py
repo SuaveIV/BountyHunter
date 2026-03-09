@@ -115,6 +115,9 @@ class SectorVisor(commands.Cog):
             if details:
                 await enhance_details_with_itad(details, self.bot.itad_manager)
 
+            # Create fallback message once per item, not per channel
+            fallback_message = await create_fallback_message(parsed, None)
+
             for _guild_id, channel_id, role_id in subs:
                 try:
                     channel = self.bot.get_channel(int(channel_id))
@@ -137,7 +140,8 @@ class SectorVisor(commands.Cog):
                         await _retry_send_message(channel, content=content, embed=embed, silent=silent)
                         logger.info(f"Sent embed for '{details.get('name')}' to channel {channel_id}")
                     else:
-                        message = await create_fallback_message(parsed, role_id)
+                        # Use the pre-created fallback message, adding role mention if needed
+                        message = f"<@&{role_id}>\n{fallback_message}" if role_id else fallback_message
                         await _retry_send_message(channel, content=message, silent=silent)
                         logger.info(f"Sent fallback message to channel {channel_id}")
                 except discord.HTTPException as e:

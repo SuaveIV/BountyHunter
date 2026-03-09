@@ -194,8 +194,8 @@ class TestSectorVisorAnnounceNew:
 
             await mock_visor._announce_new(sample_items)
 
-            # create_fallback_message is called inside the channel loop, so once per item × channel
-            assert mock_create_fallback.call_count == 4  # 2 items × 2 channels
+            # create_fallback_message is called once per item, not per channel
+            assert mock_create_fallback.call_count == 2  # 2 items
             assert mock_send.call_count == 4
 
             assert mock_visor.bot.store.mark_post_seen.call_count == 2
@@ -320,8 +320,8 @@ class TestSectorVisorAnnounceNew:
 
             await mock_visor._announce_new(sample_items)
 
-            # create_fallback_message is called inside the channel loop, once per item × channel
-            assert mock_create_fallback.call_count == 4  # 2 items × 2 channels
+            # create_fallback_message is called once per item, not per channel
+            assert mock_create_fallback.call_count == 2  # 2 items
             assert mock_send.call_count == 4
 
     @pytest.mark.asyncio
@@ -354,9 +354,9 @@ class TestSectorVisorAnnounceNew:
             # Sends are ordered: item1/channel1, item1/channel2, item2/channel1, item2/channel2
             call_args_list = mock_send.call_args_list
             assert call_args_list[0][1]["content"] == "<@&555666777>"  # channel 1 has role
-            assert call_args_list[1][1]["content"] is None             # channel 2 has no role
+            assert call_args_list[1][1]["content"] is None  # channel 2 has no role
             assert call_args_list[2][1]["content"] == "<@&555666777>"  # channel 1 has role
-            assert call_args_list[3][1]["content"] is None             # channel 2 has no role
+            assert call_args_list[3][1]["content"] is None  # channel 2 has no role
 
     @pytest.mark.asyncio
     async def test_announce_new_with_channel_fetching(
@@ -383,10 +383,14 @@ class TestSectorVisorAnnounceNew:
         mock_visor.bot.get_channel.return_value = None  # Always miss cache
         # fetch_channel is awaited in visor.py, so it must be an AsyncMock.
         # plain MagicMock (the default on a MagicMock bot) is not awaitable.
-        mock_visor.bot.fetch_channel = AsyncMock(side_effect=[
-            mock_channel1, mock_channel2,  # item 1: fetch both channels
-            mock_channel1, mock_channel2,  # item 2: fetch again (no local caching in visor)
-        ])
+        mock_visor.bot.fetch_channel = AsyncMock(
+            side_effect=[
+                mock_channel1,
+                mock_channel2,  # item 1: fetch both channels
+                mock_channel1,
+                mock_channel2,  # item 2: fetch again (no local caching in visor)
+            ]
+        )
 
         with (
             patch("bounty_discord.cogs.visor.resolve_game_details", return_value=mock_details),
