@@ -133,3 +133,34 @@ class Store:
         async with self.db.session as session:
             await session.execute(delete(GameCache))
             await session.commit()
+
+    # --- Generic Helper Function ---
+
+    async def get_cached_or_fetch(
+        self, store_name: str, identifier: str, fetch_func, permanent: bool = False
+    ) -> dict[str, Any] | None:
+        """
+        Generic helper to get cached details or fetch from API.
+
+        Args:
+            store_name: Name of the store (e.g., 'steam', 'epic', 'itch', 'ps', 'gog')
+            identifier: Unique identifier for the game (e.g., appid, slug, URL)
+            fetch_func: Async function that takes no arguments and returns game details
+            permanent: Whether to cache the result permanently
+
+        Returns:
+            Game details dict if found/fetched, None otherwise
+        """
+        # 1. Check Cache
+        cached = await self.get_cached_details(store_name, identifier)
+        if cached:
+            return cached
+
+        # 2. Fetch from API
+        details = await fetch_func()
+
+        # 3. Store if valid
+        if details:
+            await self.cache_details(store_name, identifier, details, permanent)
+
+        return details

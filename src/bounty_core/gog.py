@@ -17,32 +17,24 @@ async def get_game_details(url: str, manager: GogAPIManager, store: Store) -> di
     """
     Retrieves game details from GOG, checking cache first.
     """
-    # 1. Check Cache
-    cached = await store.get_cached_gog_details(url)
-    if cached:
-        return cached
 
-    # 2. Fetch from API
-    try:
-        details = await manager.fetch_game_details(url)
-    except GameNotFound:
-        logger.debug(f"GOG Game {url} not found.")
-        return None
-    except RateLimitExceeded as e:
-        logger.warning(f"GOG Rate Limit: {e}.")
-        return None
-    except AccessDenied as e:
-        logger.error(f"GOG Access Denied (403): {e}.")
-        return None
-    except (APIError, NetworkError) as e:
-        logger.warning(f"GOG API/Network Error for {url}: {e}")
-        return None
-    except Exception as e:
-        logger.exception(f"Unexpected error in GOG get_game_details: {e}")
-        return None
+    async def fetch_with_error_handling():
+        try:
+            return await manager.fetch_game_details(url)
+        except GameNotFound:
+            logger.debug(f"GOG Game {url} not found.")
+            return None
+        except RateLimitExceeded as e:
+            logger.warning(f"GOG Rate Limit: {e}.")
+            return None
+        except AccessDenied as e:
+            logger.error(f"GOG Access Denied (403): {e}.")
+            return None
+        except (APIError, NetworkError) as e:
+            logger.warning(f"GOG API/Network Error for {url}: {e}")
+            return None
+        except Exception as e:
+            logger.exception(f"Unexpected error in GOG get_game_details: {e}")
+            return None
 
-    # 3. Store if valid
-    if details:
-        await store.cache_gog_details(url, details, permanent=True)
-
-    return details
+    return await store.get_cached_or_fetch("gog", url, fetch_with_error_handling, permanent=True)

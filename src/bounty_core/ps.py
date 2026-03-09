@@ -6,16 +6,4 @@ async def get_game_details(url: str, manager: PSAPIManager, store: Store) -> dic
     """
     Retrieves game details, checking the SQLite cache first, then the API.
     """
-    # 1. Check Cache
-    cached = await store.get_cached_ps_details(url)
-    if cached:
-        return cached
-
-    # 2. Fetch from API
-    details = await manager.fetch_game_details(url)
-
-    # 3. Store if valid
-    if details:
-        await store.cache_ps_details(url, details, permanent=True)
-
-    return details
+    return await store.get_cached_or_fetch("ps", url, lambda: manager.fetch_game_details(url), permanent=True)
