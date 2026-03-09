@@ -55,6 +55,23 @@ async def test_create_game_embed_epic():
 
 
 @pytest.mark.asyncio
+async def test_create_game_embed_gog():
+    details = {
+        "name": "GOG Game",
+        "store_url": "https://www.gog.com/game/gog_game",
+        "image": "http://img.com/gog",
+    }
+    parsed = {"type": "GAME"}
+
+    embed = await create_game_embed(details, parsed)
+
+    assert embed.color and embed.color.value == 9061273  # GOG Purple #8A4399
+    assert embed.description == "Claim this game for free on GOG.com!"
+    assert embed.thumbnail.url == "https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png"
+    assert "GOG.com" in [f.value for f in embed.fields if f.name == "Platform"]
+
+
+@pytest.mark.asyncio
 async def test_get_fallback_details_basic():
     links = ["https://store.steampowered.com/app/123"]
     text = "Free Game: My Game"

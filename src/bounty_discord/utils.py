@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from typing import Any, cast
 
 import discord
@@ -19,6 +20,58 @@ from .config import ADMIN_DISCORD_ID
 logger = logging.getLogger(__name__)
 
 SUPPORTS_SILENT = discord.version_info.major >= 2
+
+
+@dataclass
+class StoreEmbedConfig:
+    """Configuration for store-specific Discord embeds."""
+
+    color: str | discord.Color
+    description: str | None = None
+    thumbnail_url: str | None = None
+    platform_name: str | None = None
+
+
+STORE_CONFIGS = {
+    "store.steampowered.com": StoreEmbedConfig(
+        color="#00FF00",
+    ),
+    "store.epicgames.com": StoreEmbedConfig(
+        color="#0078F2",
+        description="Claim this game for free on the Epic Games Store!",
+        thumbnail_url="https://cdn.icon-icons.com/icons2/2699/PNG/128/epic_games_logo_icon_169084.png",
+        platform_name="Epic Games Store",
+    ),
+    "itch.io": StoreEmbedConfig(
+        color="#FA5C5C",
+        description="Claim this game for free on Itch.io!",
+        thumbnail_url="https://cdn.icon-icons.com/icons2/2428/PNG/512/itch_io_logo_icon_147227.png",
+        platform_name="Itch.io",
+    ),
+    "gog.com": StoreEmbedConfig(
+        color="#8A4399",
+        description="Claim this game for free on GOG.com!",
+        thumbnail_url="https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png",
+        platform_name="GOG.com",
+    ),
+    "amazon.com": StoreEmbedConfig(
+        color="#00A8E1",
+        description="Claim this game for free with Amazon Prime Gaming!",
+        thumbnail_url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png",
+        platform_name="Amazon Prime Gaming",
+    ),
+    "gaming.amazon.com": StoreEmbedConfig(
+        color="#00A8E1",
+        description="Claim this game for free with Amazon Prime Gaming!",
+        thumbnail_url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png",
+        platform_name="Amazon Prime Gaming",
+    ),
+    "store.playstation.com": StoreEmbedConfig(
+        color=discord.Color.blue(),
+        description="Claim this game for free on the PlayStation Store!",
+        platform_name="PlayStation Store",
+    ),
+}
 
 
 def is_admin_dm():
@@ -58,14 +111,6 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
     links = parsed.get("links") or [""]
     store_url = details.get("store_url") or links[0]
 
-    # Determine store type
-    is_steam = "store.steampowered.com" in store_url
-    is_epic = "store.epicgames.com" in store_url
-    is_itch = "itch.io" in store_url
-    is_gog = "gog.com" in store_url
-    is_ps = "store.playstation.com" in store_url
-    is_amazon = "amazon.com" in store_url or "gaming.amazon.com" in store_url
-
     # Determine prefix based on parsed type
     post_type = parsed.get("type", "UNKNOWN")
     if post_type == "GAME":
@@ -82,91 +127,74 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
     # Footer keeps BountyHunter branding but dynamic TARGET_ACTOR
     embed.set_footer(text=f"BountyHunter • Free Game Scout • {TARGET_ACTOR}")
 
-    if is_steam:
-        embed.color = discord.Color.from_str("#00FF00")  # Green
-        embed.description = details.get("short_description", parsed.get("text", "")) or "No description available."
+    # Find matching store config
+    matched_config = None
+    for domain, config in STORE_CONFIGS.items():
+        if domain in store_url:
+            matched_config = config
+            break
 
-        if details.get("image"):
-            embed.set_image(url=details["image"])
+    if matched_config:
+        # Apply basic configuration from the mapping
+        if isinstance(matched_config.color, str):
+            embed.color = discord.Color.from_str(matched_config.color)
+        else:
+            embed.color = matched_config.color
 
-        # Price Info
-        price_info = details.get("price_info")
-        if isinstance(price_info, dict):
-            original = price_info.get("original_price", "N/A")
-            discount = price_info.get("discount_percent", 0)
-            embed.add_field(name="Price", value=f"~~{original}~~ -> FREE ({discount}% off)", inline=True)
-        elif isinstance(price_info, str):
-            embed.add_field(name="Price", value=price_info, inline=True)
-
-        # Reviews
-        if details.get("review_summary"):
-            embed.add_field(name="Reviews", value=details["review_summary"], inline=True)
-
-        # Release Date
-        if details.get("release_date"):
-            embed.add_field(name="Release Date", value=str(details["release_date"]), inline=True)
-
-        # Creators
-        developers = details.get("developers", [])
-        publishers = details.get("publishers", [])
-        if developers or publishers:
-            dev_str = ", ".join(developers) if developers else "N/A"
-            pub_str = ", ".join(publishers) if publishers else "N/A"
-            embed.add_field(name="Creator(s)", value=f"**Dev:** {dev_str}\n**Pub:** {pub_str}", inline=True)
-
-    elif is_epic:
-        embed.color = discord.Color.from_str("#0078F2")  # Epic Blue
-        embed.description = "Claim this game for free on the Epic Games Store!"
-        embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2699/PNG/128/epic_games_logo_icon_169084.png")
-        embed.add_field(name="Platform", value="Epic Games Store", inline=True)
-        if details.get("image"):
-            embed.set_image(url=details["image"])
-
-        # Add Mobile Links if detected
-        mobile_links = parsed.get("epic_mobile_links", {})
-        if mobile_links:
-            links_str = " | ".join([f"[{k}]({v})" for k, v in mobile_links.items()])
-            embed.add_field(name="📱 Mobile Versions", value=links_str, inline=False)
-
-    elif is_itch:
-        embed.color = discord.Color.from_str("#FA5C5C")  # Itch Pink
-        embed.description = "Claim this game for free on Itch.io!"
-        embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2428/PNG/512/itch_io_logo_icon_147227.png")
-        embed.add_field(name="Platform", value="Itch.io", inline=True)
-        if details.get("image"):
-            embed.set_image(url=details["image"])
-
-    elif is_gog:
-        embed.color = discord.Color.from_str("#8A4399")  # GOG Purple
-        embed.description = "Claim this game for free on GOG.com!"
-        embed.set_thumbnail(url="https://cdn.icon-icons.com/icons2/2428/PNG/512/gog_logo_icon_147232.png")
-        embed.add_field(name="Platform", value="GOG.com", inline=True)
-        if details.get("image"):
-            embed.set_image(url=details["image"])
-
-    elif is_amazon:
-        embed.color = discord.Color.from_str("#00A8E1")  # Amazon Blue
-        embed.description = "Claim this game for free with Amazon Prime Gaming!"
-        embed.set_thumbnail(
-            url="https://cdn.icon-icons.com/icons2/2699/PNG/128/amazon_prime_gaming_logo_icon_169083.png"
+        embed.description = (
+            matched_config.description or details.get("description") or parsed.get("text", "Free game announcement")
         )
-        embed.add_field(name="Platform", value="Amazon Prime Gaming", inline=True)
-        if details.get("image"):
-            embed.set_image(url=details["image"])
 
-    elif is_ps:
-        embed.color = discord.Color.blue()
-        embed.description = "Claim this game for free on the PlayStation Store!"
-        embed.add_field(name="Platform", value="PlayStation Store", inline=True)
-        if details.get("image"):
-            embed.set_image(url=details["image"])
+        if matched_config.thumbnail_url:
+            embed.set_thumbnail(url=matched_config.thumbnail_url)
+
+        if matched_config.platform_name:
+            embed.add_field(name="Platform", value=matched_config.platform_name, inline=True)
+
+        # Steam special case: Extra fields (reviews, release date, developers)
+        if "store.steampowered.com" in store_url:
+            embed.description = details.get("short_description", parsed.get("text", "")) or "No description available."
+
+            # Price Info
+            price_info = details.get("price_info")
+            if isinstance(price_info, dict):
+                original = price_info.get("original_price", "N/A")
+                discount = price_info.get("discount_percent", 0)
+                embed.add_field(name="Price", value=f"~~{original}~~ -> FREE ({discount}% off)", inline=True)
+            elif isinstance(price_info, str):
+                embed.add_field(name="Price", value=price_info, inline=True)
+
+            # Reviews
+            if details.get("review_summary"):
+                embed.add_field(name="Reviews", value=details["review_summary"], inline=True)
+
+            # Release Date
+            if details.get("release_date"):
+                embed.add_field(name="Release Date", value=str(details["release_date"]), inline=True)
+
+            # Creators
+            developers = details.get("developers", [])
+            publishers = details.get("publishers", [])
+            if developers or publishers:
+                dev_str = ", ".join(developers) if developers else "N/A"
+                pub_str = ", ".join(publishers) if publishers else "N/A"
+                embed.add_field(name="Creator(s)", value=f"**Dev:** {dev_str}\n**Pub:** {pub_str}", inline=True)
+
+        # Epic special case: Mobile links
+        elif "store.epicgames.com" in store_url:
+            mobile_links = parsed.get("epic_mobile_links", {})
+            if mobile_links:
+                links_str = " | ".join([f"[{k}]({v})" for k, v in mobile_links.items()])
+                embed.add_field(name="📱 Mobile Versions", value=links_str, inline=False)
 
     else:
         # Fallback for generic sites
         embed.color = discord.Color.green()
         embed.description = details.get("description") or parsed.get("text", "Free game announcement")
-        if details.get("image"):
-            embed.set_image(url=details["image"])
+
+    # Image is common for all
+    if details.get("image"):
+        embed.set_image(url=details["image"])
 
     # Retain original link logic for "Additional Links" and "Sources"
     def normalize_url(url: str) -> str:
@@ -223,6 +251,7 @@ async def create_fallback_message(parsed: dict, role_id: int | None) -> str:
 async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dict[str, Any] | None:
     """
     Central logic to resolve game details from a parsed post using available bot managers.
+
 
     Refactored to attempt all available store IDs in the parsed dict, collect all results,
     and return the best one based on completeness (has image, has description, etc.).
