@@ -16,13 +16,6 @@ dependencies = [
     "sqlalchemy>=2.0.45",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest",
-    "pytest-asyncio",
-    "ruff",
-    "pyright",
-]
 
 [build-system]
 requires = ["hatchling"]
@@ -64,6 +57,9 @@ dev = [
     "mdformat>=1.0.0",
     "mdformat-gfm>=1.0.0",
     "pyright>=1.1.407",
+    "pytest",
+    "pytest-asyncio",
     "pytest-cov>=7.0.0",
     "pytest-watch>=4.2.0",
+    "ruff",
 ]

@@ -18,7 +18,7 @@ setup:
 # Install all dependencies (runtime + dev) using uv sync
 install-deps:
     @echo "📥 Syncing dependencies with uv..."
-    mise exec -- uv sync --extra dev
+    mise exec -- uv sync
     @echo "✅ Dependencies synced."
 
 # Install only production dependencies (no dev tools)
