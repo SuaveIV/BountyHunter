@@ -13,7 +13,10 @@ from bounty_discord.utils import (
 async def test_create_game_embed_steam():
     details = {
         "name": "Test Game",
-        "store_url": "https://store.steampowered.com/app/123",
+        # store_url is now set by SteamAPIManager, so the embed can identify the platform.
+        # Without it the embed falls through to the generic branch and all assertions fail.
+        "store_url": "https://store.steampowered.com/app/123/",
+        # short_description is now extracted by SteamAPIManager._parse_store_data
         "short_description": "A cool game",
         "image": "http://img.com/123",
         "price_info": {"original_price": "$10", "discount_percent": 100},
@@ -38,7 +41,9 @@ async def test_create_game_embed_steam():
 async def test_create_game_embed_epic():
     details = {
         "name": "Epic Game",
-        "store_url": "https://store.epicgames.com/p/game",
+        # store_url is now set by EpicAPIManager, so the embed can identify the platform.
+        # Without it the embed falls through to the generic branch instead of Epic's blue branch.
+        "store_url": "https://store.epicgames.com/en-US/p/epic-game",
         "image": "http://img.com/epic",
     }
     parsed = {"type": "GAME"}
