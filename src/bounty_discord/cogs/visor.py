@@ -18,41 +18,30 @@ from ..utils import (
 
 logger = get_logger(__name__)
 
+# HTTP status codes that are transient and worth retrying
+_RETRYABLE_STATUSES = frozenset({429, 500, 503})
 
-async def _retry_send_message(channel, content=None, embed=None, silent=False, max_retries=3):
+
+async def _retry_send_message(
+    channel,
+    content: str | None = None,
+    embed: discord.Embed | None = None,
+    silent: bool = False,
+    max_retries: int = 3,
+):
     """
-    Retry helper for send_message that handles transient Discord errors.
+    Wrapper around send_message with exponential backoff retry for transient errors.
 
-    Retries on 429 (rate limit), 500 (internal error), and 503 (service unavailable).
-    Re-raises non-retryable errors like 403 (missing permissions).
-
-    Args:
-        channel: Discord channel to send to
-        content: Message content
-        embed: Embed to send
-        silent: Whether to send silently
-        max_retries: Maximum number of retry attempts (default: 3)
-
-    Returns:
-        The sent message object
-
-    Raises:
-        discord.HTTPException: For non-retryable errors or after exhausting retries
+    Retries on 429 (rate limit), 500 (internal server error), and 503 (unavailable).
+    Re-raises immediately on non-retryable errors (e.g. 403 Missing Permissions).
     """
     for attempt in range(max_retries):
         try:
             return await send_message(channel, content=content, embed=embed, silent=silent)
         except discord.HTTPException as e:
-            # Check if this is a retryable error
-            if e.status in (429, 500, 503):
-                if attempt < max_retries - 1:  # Don't sleep on the last attempt
-                    # Exponential backoff: 1s, 2s, 4s
-                    delay = 2**attempt
-                    logger.warning(f"Transient error {e.status} on attempt {attempt + 1}, retrying in {delay}s: {e}")
-                    await asyncio.sleep(delay)
-                    continue
-            # Re-raise for non-retryable errors or after exhausting retries
-            raise
+            if e.status not in _RETRYABLE_STATUSES or attempt == max_retries - 1:
+                raise
+            await asyncio.sleep(2**attempt)
 
 
 class SectorVisor(commands.Cog):
