@@ -19,6 +19,42 @@ from ..utils import (
 logger = get_logger(__name__)
 
 
+async def _retry_send_message(channel, content=None, embed=None, silent=False, max_retries=3):
+    """
+    Retry helper for send_message that handles transient Discord errors.
+
+    Retries on 429 (rate limit), 500 (internal error), and 503 (service unavailable).
+    Re-raises non-retryable errors like 403 (missing permissions).
+
+    Args:
+        channel: Discord channel to send to
+        content: Message content
+        embed: Embed to send
+        silent: Whether to send silently
+        max_retries: Maximum number of retry attempts (default: 3)
+
+    Returns:
+        The sent message object
+
+    Raises:
+        discord.HTTPException: For non-retryable errors or after exhausting retries
+    """
+    for attempt in range(max_retries):
+        try:
+            return await send_message(channel, content=content, embed=embed, silent=silent)
+        except discord.HTTPException as e:
+            # Check if this is a retryable error
+            if e.status in (429, 500, 503):
+                if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                    # Exponential backoff: 1s, 2s, 4s
+                    delay = 2**attempt
+                    logger.warning(f"Transient error {e.status} on attempt {attempt + 1}, retrying in {delay}s: {e}")
+                    await asyncio.sleep(delay)
+                    continue
+            # Re-raise for non-retryable errors or after exhausting retries
+            raise
+
+
 class SectorVisor(commands.Cog):
     """
     The SectorVisor Cog scans feeds for new bounties (free games) and announces them.
@@ -109,11 +145,11 @@ class SectorVisor(commands.Cog):
                     if details and details.get("name") and "Unknown" not in details.get("name", "Unknown"):
                         embed = await create_game_embed(details, parsed)
                         content = f"<@&{role_id}>" if role_id else None
-                        await send_message(channel, content=content, embed=embed, silent=silent)
+                        await _retry_send_message(channel, content=content, embed=embed, silent=silent)
                         logger.info(f"Sent embed for '{details.get('name')}' to channel {channel_id}")
                     else:
                         message = await create_fallback_message(parsed, role_id)
-                        await send_message(channel, content=message, silent=silent)
+                        await _retry_send_message(channel, content=message, silent=silent)
                         logger.info(f"Sent fallback message to channel {channel_id}")
                 except discord.HTTPException as e:
                     logger.error(f"Discord HTTP error sending to channel {channel_id}: {e}")

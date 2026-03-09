@@ -104,6 +104,11 @@ test:
     @echo "🧪 Running tests..."
     mise exec -- uv run pytest
 
+# Run integration tests (requires network access)
+test-integration:
+    @echo "🧪 Running integration tests (requires network access)..."
+    mise exec -- uv run pytest -m integration
+
 # Run tests with coverage report
 test-cov:
     @echo "🧪 Running tests with coverage..."

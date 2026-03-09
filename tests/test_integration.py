@@ -12,6 +12,7 @@ from bounty_core.steam import get_game_details as get_steam_details
 from bounty_core.steam_api_manager import SteamAPIManager
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_steam_integration(session, store):
     """Test fetching details for Portal (App ID 400)."""
@@ -23,6 +24,7 @@ async def test_steam_integration(session, store):
     assert details["store_url"] == "https://store.steampowered.com/app/400/"
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_epic_integration(session, store):
     """Test fetching details for Fortnite."""
@@ -33,6 +35,7 @@ async def test_epic_integration(session, store):
     assert "Fortnite" in details["name"]
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_itch_integration(session, store):
     """Test scraping an itch.io page."""
@@ -49,6 +52,7 @@ async def test_itch_integration(session, store):
         pytest.skip("Itch.io request failed or page layout changed")
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_itad_integration(session):
     """Test ITAD API if key is present."""
@@ -69,6 +73,7 @@ async def test_itad_integration(session):
     assert "price_info" in best
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_scraper_feed(session):
     """Test fetching and parsing the Reddit RSS feed."""
