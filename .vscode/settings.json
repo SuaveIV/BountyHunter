@@ -5,15 +5,16 @@
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-            "source.fixAll": "explicit",
-            "source.organizeImports": "explicit"
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
         }
     },
     "files.exclude": {
         "**/__pycache__": true,
         "**/.pytest_cache": true,
         "**/.mypy_cache": true,
-        "**/.ruff_cache": true
+        "**/.ruff_cache": true,
+        "**/.venv": true
     },
     "search.exclude": {
         "**/.venv": true
@@ -22,5 +23,5 @@
         "Justfile": "just",
         "*.just": "just"
     },
-    "python.defaultInterpreterPath": "c:\\Users\\suave\\dev\\BountyHunter\\.venv\\Scripts\\python.exe"
+    "python.terminal.activateEnvInSelectedTerminal": true
 }
