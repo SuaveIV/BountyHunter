@@ -6,7 +6,7 @@ from typing import Any
 import discord
 from discord.ext import commands, tasks
 
-from ..config import ADMIN_DISCORD_ID
+from ..config import ADMIN_DISCORD_ID, POLL_INTERVAL
 from ..logging_config import get_logger
 from ..utils import (
     create_fallback_message,
@@ -151,10 +151,10 @@ class SectorVisor(commands.Cog):
             await self.bot.store.mark_post_seen(uri)
 
     # Scheduled task
-    @tasks.loop(time=[datetime.time(hour=h, minute=m, tzinfo=datetime.UTC) for h in range(24) for m in (0, 30)])
+    @tasks.loop(seconds=POLL_INTERVAL * 60)
     async def scheduled_check(self):
         """
-        Background task that runs the feed check on a schedule (every 30 mins).
+        Background task that runs the feed check on a schedule based on POLL_INTERVAL.
         Adds a random jitter to prevent server load spikes.
         """
         await asyncio.sleep(random.uniform(1, 10))  # nosec B311
