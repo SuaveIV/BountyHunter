@@ -223,6 +223,9 @@ async def create_fallback_message(parsed: dict, role_id: int | None) -> str:
 async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dict[str, Any] | None:
     """
     Central logic to resolve game details from a parsed post using available bot managers.
+
+    Refactored to attempt all available store IDs in the parsed dict, collect all results,
+    and return the best one based on completeness (has image, has description, etc.).
     """
     # Cast to Any to access dynamic attributes (managers) without strict Gunship dependency
     bot_any = cast(Any, bot)
@@ -233,26 +236,99 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
     ps_urls = parsed.get("ps_urls", [])
     gog_urls = parsed.get("gog_urls", [])
 
-    details = None
-    try:
-        if steam_ids and getattr(bot_any, "steam_manager", None):
-            details = await get_steam_details(steam_ids[0], bot_any.steam_manager, bot_any.store)
-        elif epic_slugs and getattr(bot_any, "epic_manager", None):
-            details = await get_epic_details(epic_slugs[0], bot_any.epic_manager, bot_any.store)
-        elif itch_urls and getattr(bot_any, "itch_manager", None):
-            details = await get_itch_details(itch_urls[0], bot_any.itch_manager, bot_any.store)
-        elif ps_urls and getattr(bot_any, "ps_manager", None):
-            details = await get_ps_details(ps_urls[0], bot_any.ps_manager, bot_any.store)
-        elif gog_urls and getattr(bot_any, "gog_manager", None):
-            details = await get_gog_details(gog_urls[0], bot_any.gog_manager, bot_any.store)
-    except AccessDenied as e:
-        logger.warning(f"Access denied ({e.store}) for item '{parsed.get('text')}': {e}. Falling back.")
-    except BountyException as e:
-        logger.warning(f"Error resolving details ({type(e).__name__}): {e}. Falling back.")
-    except Exception as e:
-        logger.exception(f"Unexpected error in resolve_game_details: {e}")
+    # Collect results from all available stores
+    all_results = []
 
-    # Universal Fallback: Use ITAD if primary store failed
+    # Try Steam
+    if steam_ids and getattr(bot_any, "steam_manager", None):
+        for steam_id in steam_ids:
+            try:
+                result = await get_steam_details(steam_id, bot_any.steam_manager, bot_any.store)
+                if result:
+                    all_results.append(result)
+            except AccessDenied as e:
+                logger.warning(
+                    f"Access denied (Steam) for item '{parsed.get('text')}': {e}. Continuing with other stores."
+                )
+            except BountyException as e:
+                logger.warning(
+                    f"Error resolving Steam details ({type(e).__name__}): {e}. Continuing with other stores."
+                )
+            except Exception as e:
+                logger.exception(f"Unexpected error in Steam resolve_game_details: {e}. Continuing with other stores.")
+
+    # Try Epic
+    if epic_slugs and getattr(bot_any, "epic_manager", None):
+        for epic_slug in epic_slugs:
+            try:
+                result = await get_epic_details(epic_slug, bot_any.epic_manager, bot_any.store)
+                if result:
+                    all_results.append(result)
+            except AccessDenied as e:
+                logger.warning(
+                    f"Access denied (Epic) for item '{parsed.get('text')}': {e}. Continuing with other stores."
+                )
+            except BountyException as e:
+                logger.warning(f"Error resolving Epic details ({type(e).__name__}): {e}. Continuing with other stores.")
+            except Exception as e:
+                logger.exception(f"Unexpected error in Epic resolve_game_details: {e}. Continuing with other stores.")
+
+    # Try Itch
+    if itch_urls and getattr(bot_any, "itch_manager", None):
+        for itch_url in itch_urls:
+            try:
+                result = await get_itch_details(itch_url, bot_any.itch_manager, bot_any.store)
+                if result:
+                    all_results.append(result)
+            except AccessDenied as e:
+                logger.warning(
+                    f"Access denied (Itch) for item '{parsed.get('text')}': {e}. Continuing with other stores."
+                )
+            except BountyException as e:
+                logger.warning(f"Error resolving Itch details ({type(e).__name__}): {e}. Continuing with other stores.")
+            except Exception as e:
+                logger.exception(f"Unexpected error in Itch resolve_game_details: {e}. Continuing with other stores.")
+
+    # Try PlayStation
+    if ps_urls and getattr(bot_any, "ps_manager", None):
+        for ps_url in ps_urls:
+            try:
+                result = await get_ps_details(ps_url, bot_any.ps_manager, bot_any.store)
+                if result:
+                    all_results.append(result)
+            except AccessDenied as e:
+                logger.warning(
+                    f"Access denied (PlayStation) for item '{parsed.get('text')}': {e}. Continuing with other stores."
+                )
+            except BountyException as e:
+                logger.warning(
+                    f"Error resolving PlayStation details ({type(e).__name__}): {e}. Continuing with other stores."
+                )
+            except Exception as e:
+                logger.exception(
+                    f"Unexpected error in PlayStation resolve_game_details: {e}. Continuing with other stores."
+                )
+
+    # Try GOG
+    if gog_urls and getattr(bot_any, "gog_manager", None):
+        for gog_url in gog_urls:
+            try:
+                result = await get_gog_details(gog_url, bot_any.gog_manager, bot_any.store)
+                if result:
+                    all_results.append(result)
+            except AccessDenied as e:
+                logger.warning(
+                    f"Access denied (GOG) for item '{parsed.get('text')}': {e}. Continuing with other stores."
+                )
+            except BountyException as e:
+                logger.warning(f"Error resolving GOG details ({type(e).__name__}): {e}. Continuing with other stores.")
+            except Exception as e:
+                logger.exception(f"Unexpected error in GOG resolve_game_details: {e}. Continuing with other stores.")
+
+    # Select the best result based on completeness
+    details = select_best_game_details(all_results)
+
+    # Universal Fallback: Use ITAD if no store succeeded
     if not details and getattr(bot_any, "itad_manager", None):
         raw_text = parsed.get("text", "")
         # BUG FIX: Pass a clean game title to ITAD rather than the raw Reddit post text.
@@ -273,6 +349,57 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
         )
 
     return details
+
+
+def select_best_game_details(results: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """
+    Selects the best game details from a list of results based on completeness.
+
+    Scoring criteria (in order of importance):
+    1. Has an image (most important for Discord embeds)
+    2. Has a description/short_description
+    3. Has price information
+    4. Has developer/publisher information
+    5. Has release date
+    6. Has a valid name
+
+    Returns the result with the highest score, or None if no results.
+    """
+    if not results:
+        return None
+
+    def calculate_score(result: dict[str, Any]) -> int:
+        score = 0
+
+        # Has image (most important for Discord embeds)
+        if result.get("image"):
+            score += 100
+
+        # Has description
+        if result.get("short_description") or result.get("description"):
+            score += 50
+
+        # Has price information
+        if result.get("price_info"):
+            score += 25
+
+        # Has developer/publisher information
+        if result.get("developers") or result.get("publishers"):
+            score += 20
+
+        # Has release date
+        if result.get("release_date"):
+            score += 10
+
+        # Has a valid name
+        if result.get("name") and result["name"] != "Free Game":
+            score += 5
+
+        return score
+
+    # Sort by score (highest first) and return the best
+    best_result = max(results, key=calculate_score)
+    return best_result
 
 
 # Explicitly re-export for consumers of this module
