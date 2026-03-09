@@ -52,20 +52,15 @@ class SectorVisor(commands.Cog):
         If new items are found, triggers the announcement workflow.
         """
         try:
-            # Access scanner from bot instance
             new_announcements = await self.bot.scanner.scan()
 
             if not new_announcements:
                 logger.info(f"Check found no new items (Manual: {manual})")
             else:
                 logger.info(f"Check found {len(new_announcements)} new items (Manual: {manual})")
+
             await self._announce_new(new_announcements, manual=manual)
             self.last_check_time = datetime.datetime.now(datetime.UTC)
-            # Update bot's last check time if needed, or keep it local.
-            # The original code kept it on self.last_check_time.
-            # But the 'status' command needs it. 'status' is now in Admin Cog.
-            # So we should probably store it on the bot or let Admin Cog access this Cog.
-            # Storing on bot is easier.
             self.bot.last_check_time = self.last_check_time
 
         except Exception as e:
@@ -76,6 +71,10 @@ class SectorVisor(commands.Cog):
         """
         Iterates through new items, resolves their details, and sends announcements
         to all subscribed channels.
+
+        Each post is marked as seen AFTER announcement is attempted. This ensures that
+        a crash or send failure during the loop doesn't silently discard posts — they
+        will be retried on the next scan instead.
         """
         if not items:
             return
@@ -84,7 +83,7 @@ class SectorVisor(commands.Cog):
             logger.info("No subscriptions configured; skipping announcements")
             return
 
-        for _uri, parsed in items:
+        for uri, parsed in items:
             details = await resolve_game_details(self.bot, parsed)
 
             # Metadata Enhancement: Check ITAD for missing images
@@ -121,6 +120,11 @@ class SectorVisor(commands.Cog):
                 except Exception as e:
                     logger.exception(f"Failed to send announcement to channel {channel_id}: {e}")
 
+            # BUG FIX: Mark the post as seen here, after announcement has been attempted
+            # for all subscribed channels, rather than in the scanner before any sends.
+            # This way a crash mid-loop results in a retry, not a silent loss.
+            await self.bot.store.mark_post_seen(uri)
+
     # Scheduled task
     @tasks.loop(time=[datetime.time(hour=h, minute=m, tzinfo=datetime.UTC) for h in range(24) for m in (0, 30)])
     async def scheduled_check(self):
@@ -128,7 +132,6 @@ class SectorVisor(commands.Cog):
         Background task that runs the feed check on a schedule (every 30 mins).
         Adds a random jitter to prevent server load spikes.
         """
-        # Add a small random delay (jitter) to avoid exact-time spikes
         await asyncio.sleep(random.uniform(1, 10))  # nosec B311
         await self._process_feed(manual=False)
 

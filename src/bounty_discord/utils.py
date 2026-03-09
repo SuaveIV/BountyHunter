@@ -9,6 +9,7 @@ from bounty_core.exceptions import AccessDenied, BountyException
 from bounty_core.fetcher import TARGET_ACTOR
 from bounty_core.gog import get_game_details as get_gog_details
 from bounty_core.itch import get_game_details as get_itch_details
+from bounty_core.parser import extract_game_title
 from bounty_core.ps import get_game_details as get_ps_details
 from bounty_core.steam import get_game_details as get_steam_details
 from bounty_core.utils import enhance_details_with_itad, get_fallback_details
@@ -64,7 +65,6 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
     is_gog = "gog.com" in store_url
     is_ps = "store.playstation.com" in store_url
     is_amazon = "amazon.com" in store_url or "gaming.amazon.com" in store_url
-    is_stove = "stove.com" in store_url or "onstove.com" in store_url
 
     # Determine prefix based on parsed type
     post_type = parsed.get("type", "UNKNOWN")
@@ -161,13 +161,6 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
         if details.get("image"):
             embed.set_image(url=details["image"])
 
-    elif is_stove:
-        embed.color = discord.Color.from_str("#FF6B00")  # STOVE Orange
-        embed.description = "Claim this game for free on STOVE!"
-        embed.add_field(name="Platform", value="STOVE", inline=True)
-        if details.get("image"):
-            embed.set_image(url=details["image"])
-
     else:
         # Fallback for generic sites
         embed.color = discord.Color.green()
@@ -261,12 +254,16 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
 
     # Universal Fallback: Use ITAD if primary store failed
     if not details and getattr(bot_any, "itad_manager", None):
+        raw_text = parsed.get("text", "")
+        # BUG FIX: Pass a clean game title to ITAD rather than the raw Reddit post text.
+        # e.g. "[Steam] (Game) Portal is free!" → "Portal"
+        # Passing the raw string would produce garbage ITAD matches. Only fall back to
+        # the raw text if the regex can't extract a structured title (e.g. Amazon posts).
+        itad_title = extract_game_title(raw_text) or raw_text or None
         details = await bot_any.itad_manager.find_game(
             steam_ids=list(steam_ids) if steam_ids else None,
             epic_slugs=list(epic_slugs) if epic_slugs else None,
-            # BUG FIX: parsed uses "text" as the key for the post title/content, not "title".
-            # This was always passing None to find_game, making the ITAD title fallback a no-op.
-            title=parsed.get("text"),
+            title=itad_title,
         )
 
     # Fallback: use generic details if specific manager didn't handle it
