@@ -9,8 +9,8 @@ from bounty_discord.gunship import Gunship
 
 @pytest.mark.asyncio
 async def test_gunship_initialization():
-    # Mock aiohttp.ClientSession because it is created in __init__
-    with patch("aiohttp.ClientSession", return_value=MagicMock()) as mock_session:
+    # Mock aiohttp.ClientSession because it is created in setup_hook
+    with patch("aiohttp.ClientSession", return_value=MagicMock()):
         # Mock managers to avoid real API calls or errors
         with (
             patch("bounty_discord.gunship.SteamAPIManager"),
@@ -27,13 +27,14 @@ async def test_gunship_initialization():
             bot = Gunship(command_prefix="!", intents=intents)
 
             assert isinstance(bot, commands.Bot)
-            assert bot.steam_manager is not None
-            assert bot.epic_manager is not None
-            assert bot.scanner is not None
+            # Managers should be None initially, as they are created in setup_hook
+            assert bot.steam_manager is None
+            assert bot.epic_manager is None
+            assert bot.scanner is None
             assert bot.store is not None
 
-            # Check session creation
-            mock_session.assert_called_once()
+            # Session should be None initially
+            assert bot._http_session is None
 
 
 @pytest.mark.asyncio

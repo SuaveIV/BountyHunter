@@ -35,16 +35,26 @@ class Gunship(commands.Bot):
         self.store = Store(self.db)
         self._http_session = None
 
-        # Managers placeholders (init in setup_hook or async context preferred,
-        # but for consistency with original code, we can init them here if session is ready.
-        # However, we need an async session. Ideally we create session in setup_hook?
-        # The original code created session in __init__ (synchronously).
-        # We'll follow the pattern: create session in __init__ (synchronously instantiated object)
-        # but it's better practice to do it in setup_hook or start.
-        # Let's stick to __init__ for session creation to match original behavior if possible,
-        # but aiohttp.ClientSession() is sync constructor.
+        # Managers placeholders - will be initialized in setup_hook after session creation
+        self.steam_manager = None
+        self.epic_manager = None
+        self.itch_manager = None
+        self.ps_manager = None
+        self.gog_manager = None
+        self.itad_manager = None
+        self.scanner = None
+
+        # Logging Handler
+        self.discord_log_handler = None
+
+    async def setup_hook(self):
+        # Create HTTP session for all API managers
         self._http_session = aiohttp.ClientSession()
 
+        # Setup DB (Connect & Create Tables)
+        await self.store.setup()
+
+        # Initialize API managers after session creation
         self.steam_manager = SteamAPIManager(session=self._http_session)
         self.epic_manager = EpicAPIManager(session=self._http_session)
         self.itch_manager = ItchAPIManager(session=self._http_session)
@@ -52,13 +62,6 @@ class Gunship(commands.Bot):
         self.gog_manager = GogAPIManager(session=self._http_session)
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
         self.scanner = SectorScanner(RedditRSSFetcher(self._http_session), self.store)
-
-        # Logging Handler
-        self.discord_log_handler = None
-
-    async def setup_hook(self):
-        # Setup DB (Connect & Create Tables)
-        await self.store.setup()
 
         # Setup Critical Error Logging to DM
         self.discord_log_handler = DiscordLoggingHandler(self)
