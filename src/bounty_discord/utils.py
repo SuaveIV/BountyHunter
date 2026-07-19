@@ -1,3 +1,8 @@
+"""
+Utility functions and configuration for Discord interactions, including embed creation,
+message sending helpers, and fallback mechanisms for incomplete game data.
+"""
+
 import logging
 from dataclasses import dataclass
 from typing import Any, cast
@@ -80,7 +85,7 @@ def is_admin_dm():
     async def predicate(ctx):
         if not ADMIN_DISCORD_ID:
             return False
-        if str(ctx.author.id) != str(ADMIN_DISCORD_ID):
+        if str(ctx.author.id) != ADMIN_DISCORD_ID:
             return False
         if not isinstance(ctx.channel, discord.DMChannel):
             return False
@@ -90,7 +95,18 @@ def is_admin_dm():
 
 
 async def send_message(target, content=None, embed=None, silent=False):
-    """Helper to send messages with optional silent flag, compatible with older discord.py."""
+    """
+    Helper to send messages with an optional silent flag, compatible with older discord.py versions.
+
+    Args:
+        target: The Discord channel, user, or context to send the message to.
+        content: The text content of the message.
+        embed: A Discord embed object to include in the message.
+        silent: If True, sends the message without triggering a notification.
+
+    Returns:
+        The sent discord.Message object.
+    """
     kwargs = {}
     if content is not None:
         kwargs["content"] = content
@@ -104,7 +120,16 @@ async def send_message(target, content=None, embed=None, silent=False):
 
 
 async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
-    """Creates a rich embed for a game announcement, matching FamilyBot style."""
+    """
+    Creates a rich embed for a game announcement, matching FamilyBot style.
+
+    Args:
+        details: Dictionary containing resolved game metadata (name, description, price, etc.).
+        parsed: Dictionary containing the original parsed post data (links, type, etc.).
+
+    Returns:
+        A formatted discord.Embed object ready to be sent.
+    """
 
     # BUG FIX: parsed.get("links", [""])[0] would raise IndexError if "links" key
     # exists but is an empty list. Use `or` to treat both missing and empty the same way.
@@ -192,9 +217,8 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
         embed.color = discord.Color.green()
         embed.description = details.get("description") or parsed.get("text", "Free game announcement")
 
-    # Image is common for all
-    if details.get("image"):
-        embed.set_image(url=details["image"])
+    # Image embedding has been removed as it often pulls incorrect thumbnails from Reddit or ITAD.
+    # We will let Discord handle link previews or just rely on the embed text.
 
     # Retain original link logic for "Additional Links" and "Sources"
     def normalize_url(url: str) -> str:
@@ -235,6 +259,16 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
 
 
 async def create_fallback_message(parsed: dict, role_id: int | None) -> str:
+    """
+    Creates a plain-text fallback message when rich embed generation fails.
+
+    Args:
+        parsed: Dictionary containing the parsed post data (text, links, etc.).
+        role_id: Optional Discord role ID to mention in the message.
+
+    Returns:
+        A formatted string containing the message text and relevant links.
+    """
     text = parsed.get("text", "")
     links = parsed.get("links", [])
     source_links = parsed.get("source_links", [])

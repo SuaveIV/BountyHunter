@@ -36,6 +36,7 @@ We use `uv` and `mise` to manage dependencies.
    ```
 
    **Polling Interval**
+
    - Set `POLL_INTERVAL` in minutes (minimum: 1 minute).
    - The bot will check the feed every `POLL_INTERVAL` minutes.
 
