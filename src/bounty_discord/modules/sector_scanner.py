@@ -138,10 +138,13 @@ class SectorScanner:
         session: aiohttp.ClientSession,
         store: Store,
         fetchers: list[FreeGamesFetcher] | None = None,
+        allowed_content_types: frozenset[str] | None = None,
     ):
         self.session = session
         self.store = store
         self.fetchers = fetchers if fetchers is not None else default_free_games_fetchers(session)
+        # None keeps every content type; the Discord layer passes the configured policy.
+        self.allowed_content_types = allowed_content_types
 
     async def scan(self, ignore_seen: bool = False) -> list[tuple[str, dict[str, Any]]]:
         """
@@ -158,7 +161,7 @@ class SectorScanner:
         """
         try:
             games = await fetch_all_games(self.fetchers)
-            accepted = dedupe_games(filter_games(games))
+            accepted = dedupe_games(filter_games(games, self.allowed_content_types))
 
             if not accepted:
                 return []

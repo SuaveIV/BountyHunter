@@ -9,6 +9,8 @@ from bounty_core.fetcher import (
     CONTENT_DLC,
     CONTENT_GAME,
     CONTENT_ITEM,
+    CONTENT_TYPES,
+    DEFAULT_CONTENT_TYPES,
     EpicFreeGamesFetcher,
     FreeGame,
     GamerPowerFreeGamesFetcher,
@@ -26,6 +28,7 @@ from bounty_core.fetcher import (
     is_task_exempt,
     parse_bluesky_feed,
     parse_bluesky_post,
+    parse_content_types,
     parse_gamerpower_giveaway,
     parse_gamerpower_giveaways,
     parse_retry_after,
@@ -238,6 +241,38 @@ def test_filter_games_drops_and_counts():
     accepted = filter_games(games)
 
     assert [game.source_id for game in accepted] == ["1"]
+
+
+# --- Content type policy ----------------------------------------------------
+
+
+def test_parse_content_types():
+    assert parse_content_types(None) == {CONTENT_GAME}
+    assert parse_content_types("") == {CONTENT_GAME}
+    assert parse_content_types("game") == {CONTENT_GAME}
+    assert parse_content_types("Game, DLC") == {CONTENT_GAME, CONTENT_DLC}
+    assert parse_content_types("games,dlcs,loot,playtest") == {CONTENT_GAME, CONTENT_DLC, CONTENT_ITEM, CONTENT_BETA}
+    # A setting that names nothing recognisable falls back rather than muting the channel.
+    assert parse_content_types("nonsense") == {CONTENT_GAME}
+    assert parse_content_types("game,nonsense") == {CONTENT_GAME}
+
+
+def test_filter_games_honours_the_content_type_policy():
+    games = [
+        make_game(source_id="1", title="A Game", content_type=CONTENT_GAME),
+        make_game(source_id="2", title="A DLC", content_type=CONTENT_DLC),
+        make_game(source_id="3", title="A Skin", content_type=CONTENT_ITEM),
+        make_game(source_id="4", title="A Playtest", content_type=CONTENT_BETA),
+    ]
+
+    default = filter_games(games, DEFAULT_CONTENT_TYPES)
+    everything = filter_games(games, CONTENT_TYPES)
+
+    assert [game.source_id for game in default] == ["1"]
+    assert [game.source_id for game in everything] == ["1", "2", "3", "4"]
+    assert rejection_reason(games[1], DEFAULT_CONTENT_TYPES) == "content type not enabled"
+    # No policy means no content-type filtering, which is the core's default.
+    assert len(filter_games(games)) == 4
 
 
 # --- Aggregate threads (weekly / mega threads) -------------------------------

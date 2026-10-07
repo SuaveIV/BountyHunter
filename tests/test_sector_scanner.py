@@ -136,6 +136,24 @@ async def test_scan_survives_a_dead_source():
 
 
 @pytest.mark.asyncio
+async def test_scan_uses_the_configured_content_types():
+    fetcher = StubFetcher(
+        [
+            make_game(source_id="1", title="A Game", content_type="game"),
+            make_game(source_id="2", title="A DLC", content_type="dlc"),
+        ]
+    )
+
+    games_only = SectorScanner(
+        session=AsyncMock(), store=make_store(), fetchers=[fetcher], allowed_content_types=frozenset({"game"})
+    )
+    everything = SectorScanner(session=AsyncMock(), store=make_store(), fetchers=[fetcher])
+
+    assert [key for key, _ in await games_only.scan()] == ["epic:1"]
+    assert [key for key, _ in await everything.scan()] == ["epic:1", "epic:2"]
+
+
+@pytest.mark.asyncio
 async def test_scan_ignore_seen_bypasses_seeding_and_dedupe_store():
     fetcher = StubFetcher([make_game()])
     store = make_store(seen=True, has_seen=False)

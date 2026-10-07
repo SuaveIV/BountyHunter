@@ -6,6 +6,7 @@ from discord.ext import commands
 
 from bounty_core.db.engine import Database
 from bounty_core.epic_api_manager import EpicAPIManager
+from bounty_core.fetcher import parse_content_types
 from bounty_core.gog_api_manager import GogAPIManager
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch_api_manager import ItchAPIManager
@@ -14,7 +15,7 @@ from bounty_core.steam_api_manager import SteamAPIManager
 from bounty_core.store import Store
 from bounty_discord.modules.sector_scanner import SectorScanner
 
-from .config import ADMIN_DISCORD_ID, DATABASE_PATH, ITAD_API_KEY
+from .config import ADMIN_DISCORD_ID, DATABASE_PATH, FREE_GAMES_CONTENT_TYPES, ITAD_API_KEY
 from .logging_config import DiscordLoggingHandler, get_logger
 
 logger = get_logger(__name__)
@@ -64,7 +65,11 @@ class Gunship(commands.Bot):
         self.ps_manager = PSAPIManager(session=self._http_session)
         self.gog_manager = GogAPIManager(session=self._http_session)
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
-        self.scanner = SectorScanner(self._http_session, self.store)
+        self.scanner = SectorScanner(
+            self._http_session,
+            self.store,
+            allowed_content_types=parse_content_types(FREE_GAMES_CONTENT_TYPES),
+        )
 
         # Setup Critical Error Logging to DM
         self.discord_log_handler = DiscordLoggingHandler(self)

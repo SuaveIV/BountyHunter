@@ -10,6 +10,7 @@ class Settings(BaseModel):
     ADMIN_DISCORD_ID: str = ""
     LOG_LEVEL: str = "INFO"
     ITAD_API_KEY: str = ""
+    FREE_GAMES_CONTENT_TYPES: str = "game"
 
     @field_validator("BOT_TOKEN")
     @classmethod
@@ -27,6 +28,7 @@ try:
         ADMIN_DISCORD_ID=os.getenv("ADMIN_DISCORD_ID", ""),
         LOG_LEVEL=os.getenv("LOG_LEVEL", "INFO"),
         ITAD_API_KEY=os.getenv("ITAD_API_KEY", ""),
+        FREE_GAMES_CONTENT_TYPES=os.getenv("FREE_GAMES_CONTENT_TYPES", "game"),
     )
 except ValidationError as e:
     raise RuntimeError(f"Configuration Error: {e}") from e
@@ -38,3 +40,6 @@ POLL_INTERVAL = _settings.POLL_INTERVAL
 ADMIN_DISCORD_ID = _settings.ADMIN_DISCORD_ID
 LOG_LEVEL = _settings.LOG_LEVEL
 ITAD_API_KEY = _settings.ITAD_API_KEY
+
+# Parsed by the scanner; see bounty_core.fetcher.parse_content_types
+FREE_GAMES_CONTENT_TYPES = _settings.FREE_GAMES_CONTENT_TYPES
