@@ -311,7 +311,6 @@ def dedupe_games(games: Sequence[FreeGame]) -> list[FreeGame]:
     return unique
 
 
-
 # --- HTTP -------------------------------------------------------------------
 
 
@@ -418,7 +417,6 @@ def parse_iso_timestamp(value: Any) -> datetime | None:
     return parsed
 
 
-
 # --- Classification ---------------------------------------------------------
 
 
@@ -433,6 +431,16 @@ CONTENT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (CONTENT_BETA, ("beta", "playtest")),
     (CONTENT_ITEM, ("loot", "item", "other", "in-game", "avatar", "skin")),
 )
+
+#: GamerPower's ``type`` field, mapped onto our content types.
+GAMERPOWER_TYPE_ALIASES = {
+    "game": CONTENT_GAME,
+    "early access": CONTENT_GAME,
+    "dlc": CONTENT_DLC,
+    "loot": CONTENT_ITEM,
+    "beta": CONTENT_BETA,
+    "demo": CONTENT_BETA,
+}
 
 
 def classify_content(label: str) -> str:
@@ -449,14 +457,16 @@ def classify_gamerpower_type(raw_type: str, title: str = "") -> str:
     Map GamerPower's ``type`` field onto a content type.
 
     GamerPower types ``loot`` entries as DLC when it can, but the field is unreliable for
-    bundles, so a title check backs it up before trusting ``loot``.
+    bundles, so the title is checked too before trusting ``loot``.
     """
     lowered = (raw_type or "").strip().lower()
-    if lowered in (CONTENT_GAME, "early access"):
+    mapped = GAMERPOWER_TYPE_ALIASES.get(lowered)
+
+    if mapped == CONTENT_GAME:
         return CONTENT_GAME
-    if lowered in (CONTENT_DLC, CONTENT_BETA, CONTENT_ITEM):
-        return classify_content(f"{lowered} {title}")
-    return classify_content(title)
+    if mapped:
+        return classify_content(f"{mapped} {title}")
+    return classify_content(f"{lowered} {title}")
 
 
 # --- Filtering --------------------------------------------------------------
@@ -584,7 +594,6 @@ def filter_games(games: Sequence[FreeGame]) -> list[FreeGame]:
     return accepted
 
 
-
 # --- Epic -------------------------------------------------------------------
 
 EPIC_PROMOTIONS_URL = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions"
@@ -649,7 +658,7 @@ class EpicFreeGamesFetcher:
             params=EPIC_PROMOTIONS_PARAMS,
             limiter=self.rate_limiter,
         )
-        if not payload:
+        if not isinstance(payload, dict):
             return []
 
         elements = (payload.get("data") or {}).get("Catalog", {}).get("searchStore", {}).get("elements") or []
@@ -684,7 +693,6 @@ class EpicFreeGamesFetcher:
             )
 
         return games
-
 
 
 # --- GamerPower -------------------------------------------------------------
@@ -761,7 +769,6 @@ class GamerPowerFreeGamesFetcher:
         return games
 
 
-
 # --- Bluesky ----------------------------------------------------------------
 
 BLUESKY_FEED_URL = "https://public.api.bsky.app/xrpc/app.bsky.feed.getAuthorFeed"
@@ -772,6 +779,11 @@ BLUESKY_LINK_FEATURE = "app.bsky.richtext.facet#link"
 BLUESKY_PLATFORM_TAG_REGEX = re.compile(r"^\s*\[([^\]]{1,40})\]\s*")
 BLUESKY_CONTENT_TAG_REGEX = re.compile(r"^\s*\(([^)]{1,40})\)\s*")
 BLUESKY_URL_REGEX = re.compile(r"https?://[^\s\)\]<>]+")
+
+#: The mirror appends these to every post; they would otherwise defeat cross-source
+#: title dedupe ("Blair Witch is free! See the /r/FreeGameFindings thread below.").
+BLUESKY_BOILERPLATE_REGEX = re.compile(r"\s*see the .*?thread.*$", re.IGNORECASE)
+BLUESKY_FREE_SUFFIX_REGEX = re.compile(r"\s*(?:is|are)\s+(?:now\s+)?free!?\s*$", re.IGNORECASE)
 
 
 def strip_query_string(url: str) -> str:
@@ -784,7 +796,8 @@ def split_bluesky_title(text: str) -> tuple[str, str, str]:
     Split a Bluesky listing into ``(platform_tag, content_tag, title)``.
 
     Posts look like ``[Steam] (Game) Blair Witch is free!``; both leading tags are pulled
-    off the title and used for the platform and content type.
+    off the title and used for the platform and content type. The trailing link is dropped
+    from the title but kept in the full post text.
     """
     remainder = text.strip()
     platform_tag = ""
@@ -805,8 +818,12 @@ def split_bluesky_title(text: str) -> tuple[str, str, str]:
 
         break
 
-    first_line = remainder.strip().splitlines()[0].strip() if remainder.strip() else ""
-    return platform_tag, content_tag, first_line
+    remainder = BLUESKY_URL_REGEX.sub(" ", remainder).strip()
+    first_line = remainder.splitlines()[0].strip() if remainder else ""
+
+    title = BLUESKY_BOILERPLATE_REGEX.sub("", first_line).strip()
+    title = BLUESKY_FREE_SUFFIX_REGEX.sub("", title).strip()
+    return platform_tag, content_tag, title
 
 
 def bluesky_listing_url(record: dict[str, Any], post: dict[str, Any]) -> str:
@@ -933,4 +950,3 @@ async def fetch_all_games(fetchers: Sequence[FreeGamesFetcher]) -> list[FreeGame
         games.extend(result)
 
     return games
-

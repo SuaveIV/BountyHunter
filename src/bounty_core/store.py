@@ -37,6 +37,18 @@ class Store:
             result = await session.execute(stmt)
             return result.scalar_one_or_none() is not None
 
+    async def has_seen_posts(self) -> bool:
+        """
+        True when anything has been marked seen before.
+
+        Used to detect the first run against a fresh database, where every active listing
+        should be seeded as seen instead of announced.
+        """
+        async with self.db.session as session:
+            stmt = select(SeenPost.id).limit(1)
+            result = await session.execute(stmt)
+            return result.first() is not None
+
     async def mark_post_seen(self, post_id: str):
         async with self.db.session as session:
             # Using INSERT OR IGNORE via dialect specific

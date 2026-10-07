@@ -1,142 +1,171 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
-from bounty_discord.modules.sector_scanner import SectorScanner
+from bounty_core.fetcher import FreeGame
+from bounty_discord.modules.sector_scanner import SectorScanner, parsed_from_free_game
+
+
+class StubFetcher:
+    """Stand-in for a bounty_core.fetcher source adapter."""
+
+    name = "stub"
+
+    def __init__(self, games: list[FreeGame] | None = None, error: Exception | None = None):
+        self.games = games or []
+        self.error = error
+        self.calls = 0
+
+    async def fetch_games(self) -> list[FreeGame]:
+        self.calls += 1
+        if self.error:
+            raise self.error
+        return list(self.games)
+
+
+def make_game(**kwargs) -> FreeGame:
+    defaults = {
+        "source": "epic",
+        "source_id": "1",
+        "title": "Portal",
+        "url": "https://store.epicgames.com/en-US/p/portal",
+        "platforms": {"epic"},
+        "text": "Portal is free!",
+    }
+    defaults.update(kwargs)
+    return FreeGame(**defaults)
+
+
+def make_store(seen: bool = False, has_seen: bool = True):
+    store = AsyncMock()
+    store.is_post_seen = AsyncMock(return_value=seen)
+    store.mark_post_seen = AsyncMock()
+    store.has_seen_posts = AsyncMock(return_value=has_seen)
+    return store
 
 
 @pytest.mark.asyncio
-async def test_sector_scanner_scan():
-    # Mock dependencies
-    mock_fetcher = MagicMock()
-    mock_fetcher.fetch_latest = AsyncMock()
-
-    mock_store = MagicMock()
-    mock_store.is_post_seen = AsyncMock(return_value=False)
-    mock_store.mark_post_seen = AsyncMock()
-
-    # Mock data returned by fetcher
-    mock_fetcher.fetch_latest.return_value = [
-        {
-            "id": "post1",
-            "title": "Free Game: Portal",
-            "url": "https://reddit.com/r/freegamefindings/post1",
-            "external_url": "https://store.steampowered.com/app/400/Portal",
-            "thumbnail": "http://thumb.com/portal.jpg",
-        },
-        {
-            "id": "post2",
-            "title": "Epic Game: Fortnite",
-            "url": "https://reddit.com/r/freegamefindings/post2",
-            "external_url": "https://store.epicgames.com/p/fortnite",
-            "thumbnail": None,
-        },
-        {
-            "id": "post3",
-            "title": "Itch Game",
-            "url": "https://reddit.com/r/freegamefindings/post3",
-            "external_url": "https://mygame.itch.io/cool-game",
-            "thumbnail": None,
-        },
-        {
-            "id": "post4",
-            "title": "Bad Link",
-            "url": "https://reddit.com/r/freegamefindings/post4",
-            "external_url": "https://gleam.io/reward",
-            "thumbnail": None,
-        },
-        {
-            "id": "post5",
-            "title": "Discussion Thread",
-            "url": "https://reddit.com/r/freegamefindings/post5",
-            "external_url": "https://reddit.com/r/freegamefindings/post5",  # Same as url (no external)
-            "thumbnail": None,
-        },
-    ]
-
-    scanner = SectorScanner(mock_fetcher, mock_store)
-    results = await scanner.scan()
-
-    # Post 4 should be skipped because gleam.io is in DENY_DOMAINS
-    # So we expect 4 results
-    assert len(results) == 4
-
-    # Check first result (Steam)
-    uri1, parsed1 = results[0]
-    assert uri1 == "post1"
-    assert "https://store.steampowered.com/app/400/Portal" in parsed1["links"]
-    assert "400" in parsed1["steam_app_ids"]
-
-    # Check second result (Epic)
-    uri2, parsed2 = results[1]
-    assert uri2 == "post2"
-    assert "https://store.epicgames.com/p/fortnite" in parsed2["links"]
-    assert "fortnite" in parsed2["epic_slugs"]
-
-    # Check third result (Itch)
-    uri3, parsed3 = results[2]
-    assert uri3 == "post3"
-    assert "https://mygame.itch.io/cool-game" in parsed3["links"]
-    assert "https://mygame.itch.io/cool-game" in parsed3["itch_urls"]
-
-    # Check fourth result (Discussion - post5)
-    uri5, parsed5 = results[3]
-    assert uri5 == "post5"
-    assert "https://reddit.com/r/freegamefindings/post5" in parsed5["links"]
-
-    # Verify store interaction
-    # is_post_seen called for all 5 posts
-    assert mock_store.is_post_seen.call_count == 5
-    # mark_post_seen called only for the 4 valid posts
-    assert mock_store.mark_post_seen.call_count == 4
-
-
-@pytest.mark.asyncio
-async def test_sector_scanner_skip_seen():
-    mock_fetcher = MagicMock()
-    mock_fetcher.fetch_latest = AsyncMock(return_value=[{"id": "seen_post"}])
-
-    mock_store = MagicMock()
-    mock_store.is_post_seen = AsyncMock(return_value=True)  # It is seen
-    mock_store.mark_post_seen = AsyncMock()
-
-    scanner = SectorScanner(mock_fetcher, mock_store)
-    results = await scanner.scan()
-
-    assert len(results) == 0
-    mock_store.mark_post_seen.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_sector_scanner_mobile_epic():
-    mock_fetcher = MagicMock()
-    mock_fetcher.fetch_latest = AsyncMock(
-        return_value=[
-            {
-                "id": "mobile_post",
-                "title": "Epic Mobile Games",
-                "url": "https://reddit.com/r/freegamefindings/mobile",
-                "external_url": "https://store.epicgames.com/p/bouncemasters-android-ebc0b1",
-                "thumbnail": None,
-            }
+async def test_scan_returns_new_listings():
+    fetcher = StubFetcher(
+        [
+            make_game(source_id="1", title="Portal", url="https://store.steampowered.com/app/400/Portal"),
+            make_game(source_id="2", title="Fortnite", url="https://store.epicgames.com/p/fortnite"),
         ]
     )
+    store = make_store()
+    scanner = SectorScanner(session=AsyncMock(), store=store, fetchers=[fetcher])
 
-    # Mock more links in the search blob (simulating body text)
-    # The scan logic uses search_blob = text + " " + " ".join(valid_links)
-    # To test multiple links, we need them in the fetcher result or simulate text containing them.
-    # Actually, scan() only takes external_url and reddit_url.
-    # If we want to test multiple links, we'd need them in the title or a more complex fetcher.
-    # For now, let's just test that the one link is categorized as Android.
-
-    mock_store = MagicMock()
-    mock_store.is_post_seen = AsyncMock(return_value=False)
-    mock_store.mark_post_seen = AsyncMock()
-
-    scanner = SectorScanner(mock_fetcher, mock_store)
     results = await scanner.scan()
 
-    assert len(results) == 1
+    assert [key for key, _ in results] == ["epic:1", "epic:2"]
+
     _, parsed = results[0]
-    assert parsed["epic_mobile_links"]["Android"] == "https://store.epicgames.com/p/bouncemasters-android-ebc0b1"
-    assert "bouncemasters-android-ebc0b1" in parsed["epic_slugs"]
+    assert parsed["uri"] == "epic:1"
+    assert parsed["source"] == "epic"
+    assert parsed["title"] == "Portal"
+    assert "400" in parsed["steam_app_ids"]
+    assert "https://store.steampowered.com/app/400/Portal" in parsed["links"]
+    assert parsed["type"] == "GAME"
+
+    # Announcements are marked seen by the visor, not the scanner.
+    store.mark_post_seen.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_scan_filters_and_dedupes_across_sources():
+    fetcher = StubFetcher(
+        [
+            make_game(source_id="1", title="BURIED STARS", url="https://store.epicgames.com/p/buried-stars"),
+            # Same game, different source: dedupe keeps the first sighting (Epic).
+            make_game(
+                source="bluesky",
+                source_id="at://post/2",
+                title="BURIED STARS (Epic Games) Giveaway",
+                url="https://redd.it/abc",
+                platforms={"epic"},
+            ),
+            # Raffles are dropped by the excluded-keyword filter.
+            make_game(source_id="3", title="Raffle time", text="raffle", platforms={"steam"}),
+            # No storefront from the whitelist.
+            make_game(source_id="4", title="Mobile only", platforms={"android"}),
+        ]
+    )
+    scanner = SectorScanner(session=AsyncMock(), store=make_store(), fetchers=[fetcher])
+
+    results = await scanner.scan()
+
+    assert [key for key, _ in results] == ["epic:1"]
+
+
+@pytest.mark.asyncio
+async def test_scan_skips_seen_listings():
+    fetcher = StubFetcher([make_game()])
+    store = make_store(seen=True)
+    scanner = SectorScanner(session=AsyncMock(), store=store, fetchers=[fetcher])
+
+    assert await scanner.scan() == []
+
+
+@pytest.mark.asyncio
+async def test_scan_seeds_first_run_without_announcing():
+    fetcher = StubFetcher([make_game(source_id="1"), make_game(source_id="2", title="Second")])
+    store = make_store(has_seen=False)
+    scanner = SectorScanner(session=AsyncMock(), store=store, fetchers=[fetcher])
+
+    assert await scanner.scan() == []
+    assert store.mark_post_seen.await_count == 2
+    store.mark_post_seen.assert_any_await("epic:1")
+    store.mark_post_seen.assert_any_await("epic:2")
+
+    # A later run announces nothing either, because both listings are now seen.
+    store.is_post_seen = AsyncMock(return_value=True)
+    store.has_seen_posts = AsyncMock(return_value=True)
+    assert await scanner.scan() == []
+
+
+@pytest.mark.asyncio
+async def test_scan_survives_a_dead_source():
+    good = StubFetcher([make_game()])
+    bad = StubFetcher(error=RuntimeError("feed is down"))
+    scanner = SectorScanner(session=AsyncMock(), store=make_store(), fetchers=[bad, good])
+
+    results = await scanner.scan()
+
+    assert [key for key, _ in results] == ["epic:1"]
+    assert bad.calls == 1 and good.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_scan_ignore_seen_bypasses_seeding_and_dedupe_store():
+    fetcher = StubFetcher([make_game()])
+    store = make_store(seen=True, has_seen=False)
+    scanner = SectorScanner(session=AsyncMock(), store=store, fetchers=[fetcher])
+
+    results = await scanner.scan(ignore_seen=True)
+
+    assert len(results) == 1
+    store.is_post_seen.assert_not_called()
+    store.mark_post_seen.assert_not_called()
+
+
+def test_parsed_from_free_game_collects_store_links_from_body():
+    game = make_game(
+        source="bluesky",
+        source_id="at://post/1",
+        title="Blair Witch is free!",
+        url="https://redd.it/xyz",
+        platforms={"steam"},
+        text="[Steam] (Game) Blair Witch is free! https://store.steampowered.com/app/1094840/",
+        content_type="dlc",
+    )
+
+    parsed = parsed_from_free_game(game)
+
+    assert parsed["links"] == [
+        "https://redd.it/xyz",
+        "https://store.steampowered.com/app/1094840/",
+    ]
+    assert parsed["steam_app_ids"] == ["1094840"]
+    assert parsed["content_type"] == "dlc"
+    assert parsed["type"] == "ITEM"
+    assert parsed["platforms"] == ["steam"]

@@ -1,113 +1,168 @@
+"""
+SectorScanner: the fan-in between the free-game fetchers and the Discord layer.
+
+Every fetcher in :mod:`bounty_core.fetcher` is an independent source, so one failing feed
+only degrades a scan instead of failing it. Listings are filtered, deduplicated across
+sources, and then translated into the flat "parsed" dict that
+:class:`~bounty_discord.cogs.visor.SectorVisor` and the embed helpers already understand.
+"""
+
 import logging
 from typing import Any
 
-from bounty_core.fetcher import RedditRSSFetcher
+import aiohttp
+
+from bounty_core.fetcher import (
+    CONTENT_BETA,
+    CONTENT_DLC,
+    CONTENT_GAME,
+    CONTENT_ITEM,
+    FreeGame,
+    FreeGamesFetcher,
+    dedupe_games,
+    default_free_games_fetchers,
+    fetch_all_games,
+    filter_games,
+)
 from bounty_core.parser import (
-    determine_content_type,
+    URL_REGEX,
     extract_epic_slugs,
     extract_gog_urls,
     extract_itch_urls,
     extract_ps_urls,
     extract_steam_ids,
-    is_safe_link,
 )
 from bounty_core.store import Store
 
 logger = logging.getLogger(__name__)
 
+#: Maps the normalized content type onto the legacy parsed "type" the embeds render.
+CONTENT_POST_TYPES = {
+    CONTENT_GAME: "GAME",
+    CONTENT_DLC: "ITEM",
+    CONTENT_ITEM: "ITEM",
+    CONTENT_BETA: "ITEM",
+}
+
+EPIC_MOBILE_MARKERS = (("-android-", "Android"), ("-ios-", "iOS"))
+LINK_TRAILING_CHARS = ").,;:"
+
+
+def _listing_links(game: FreeGame) -> list[str]:
+    """
+    Collect the listing URL plus any store links embedded in the body text.
+
+    Bluesky listings point at a Reddit thread, so the body link (when there is one) is
+    what lets the store managers resolve a rich embed.
+    """
+    links: list[str] = []
+
+    def add(url: str) -> None:
+        cleaned = url.rstrip(LINK_TRAILING_CHARS).strip()
+        if cleaned and cleaned not in links:
+            links.append(cleaned)
+
+    if game.url:
+        add(game.url)
+
+    for match in URL_REGEX.findall(game.text or ""):
+        add(match)
+
+    return links
+
+
+def _epic_mobile_links(links: list[str]) -> dict[str, str]:
+    """Flag Epic Android/iOS variants so the embed can call them out."""
+    mobile: dict[str, str] = {}
+    for link in links:
+        if "store.epicgames.com" not in link:
+            continue
+        lowered = link.lower()
+        for marker, label in EPIC_MOBILE_MARKERS:
+            if marker in lowered:
+                mobile.setdefault(label, link)
+    return mobile
+
+
+def parsed_from_free_game(game: FreeGame) -> dict[str, Any]:
+    """Translate a normalized :class:`FreeGame` into the parsed dict the visor renders."""
+    links = _listing_links(game)
+    blob = " ".join([game.title, game.text or "", *links])
+
+    return {
+        "uri": game.dedupe_key,
+        "title": game.title,
+        "text": f"{game.title}\n{game.text}" if game.text else game.title,
+        "source": game.source,
+        "source_id": game.source_id,
+        "content_type": game.content_type,
+        "type": CONTENT_POST_TYPES.get(game.content_type, "UNKNOWN"),
+        "platforms": sorted(game.platforms),
+        "expires_at": game.expires_at,
+        "links": links,
+        "source_links": [],
+        "steam_app_ids": sorted(extract_steam_ids(blob)),
+        "epic_slugs": sorted(extract_epic_slugs(blob)),
+        "epic_mobile_links": _epic_mobile_links(links),
+        "itch_urls": sorted(extract_itch_urls(blob)),
+        "ps_urls": sorted(extract_ps_urls(blob)),
+        "gog_urls": sorted(extract_gog_urls(blob)),
+        "image": None,
+    }
+
 
 class SectorScanner:
-    """
-    Scans external sectors (feeds) for bounties (free games).
-    """
+    """Scans every free-game source for new bounties (free games)."""
 
-    def __init__(self, fetcher: RedditRSSFetcher, store: Store):
-        self.fetcher = fetcher
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        store: Store,
+        fetchers: list[FreeGamesFetcher] | None = None,
+    ):
+        self.session = session
         self.store = store
+        self.fetchers = fetchers if fetchers is not None else default_free_games_fetchers(session)
 
-    async def scan(self, limit: int = 10, ignore_seen: bool = False) -> list[tuple[str, dict[str, Any]]]:
+    async def scan(self, ignore_seen: bool = False) -> list[tuple[str, dict[str, Any]]]:
         """
-        Scans the feed for new deals.
-        Returns a list of (uri, parsed_data) tuples for new, unseen posts.
-        If ignore_seen is True, returns all fetched posts (useful for testing).
+        Scans the configured sources for new deals.
+
+        Returns a list of ``(dedupe_key, parsed_data)`` tuples for new, unseen listings.
+        If ignore_seen is True, returns all fetched listings (useful for testing).
+
+        The first run on a fresh database seeds every accepted listing as seen instead of
+        announcing it, so a new install does not dump the entire active backlog into the
+        channel. Valid posts are otherwise marked seen by SectorVisor._announce_new after
+        announcement is attempted, so a crash or send failure retries rather than silently
+        losing the post.
         """
         try:
-            posts = await self.fetcher.fetch_latest(limit=limit)
-            new_announcements = []
+            games = await fetch_all_games(self.fetchers)
+            accepted = dedupe_games(filter_games(games))
 
-            for post in posts:
-                uri = post.get("id")
-                if not uri:
+            if not accepted:
+                return []
+
+            seeding = not ignore_seen and not await self.store.has_seen_posts()
+            announcements: list[tuple[str, dict[str, Any]]] = []
+
+            for game in accepted:
+                key = game.dedupe_key
+
+                if seeding:
+                    await self.store.mark_post_seen(key)
                     continue
 
-                # Check if we've already processed this bounty
-                if not ignore_seen and await self.store.is_post_seen(uri):
+                if not ignore_seen and await self.store.is_post_seen(key):
                     continue
 
-                text = post.get("title", "")
+                announcements.append((key, parsed_from_free_game(game)))
 
-                # Determine content type and filter INFO posts
-                content_type = determine_content_type(text)
-                if content_type == "INFO":
-                    logger.debug(f"Skipping INFO post: {text}")
-                    if not ignore_seen:
-                        await self.store.mark_post_seen(uri)
-                    continue
+            if seeding:
+                logger.info(f"First run: seeded {len(accepted)} listing(s) as already seen")
 
-                reddit_url = post.get("url", "")
-                external_url = post.get("external_url", "")
-                thumbnail = post.get("thumbnail")
-
-                valid_links = set()
-                source_links = set()
-
-                if is_safe_link(external_url):
-                    valid_links.add(external_url)
-
-                if is_safe_link(reddit_url):
-                    source_links.add(reddit_url)
-
-                if valid_links:
-                    # Search for IDs in both post text and the links themselves
-                    search_blob = text + " " + " ".join(valid_links)
-                    steam_ids = extract_steam_ids(search_blob)
-                    epic_slugs = extract_epic_slugs(search_blob)
-                    itch_urls = extract_itch_urls(search_blob)
-                    ps_urls = extract_ps_urls(search_blob)
-                    gog_urls = extract_gog_urls(search_blob)
-
-                    # Identify Mobile Variants in Epic Links
-                    epic_mobile_links = {}
-                    for link in valid_links:
-                        if "store.epicgames.com" in link:
-                            link_lower = link.lower()
-                            if "-android-" in link_lower:
-                                epic_mobile_links["Android"] = link
-                            elif "-ios-" in link_lower:
-                                epic_mobile_links["iOS"] = link
-
-                    parsed = {
-                        "uri": uri,
-                        "text": text,
-                        "type": content_type,
-                        "links": list(valid_links),
-                        "source_links": list(source_links),
-                        "steam_app_ids": list(steam_ids),
-                        "epic_slugs": list(epic_slugs),
-                        "epic_mobile_links": epic_mobile_links,
-                        "itch_urls": list(itch_urls),
-                        "ps_urls": list(ps_urls),
-                        "gog_urls": list(gog_urls),
-                        "image": thumbnail,
-                    }
-
-                    new_announcements.append((uri, parsed))
-                    # We mark it as seen immediately to avoid processing it again
-                    # In a more robust system, we might wait until confirmed transmission
-                    if not ignore_seen:
-                        await self.store.mark_post_seen(uri)
-
-            return new_announcements
+            return announcements
 
         except Exception as e:
             logger.exception("Error during sector scan: %s", e)
