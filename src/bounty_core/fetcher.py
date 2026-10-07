@@ -492,6 +492,13 @@ TASK_KEYWORDS = (
 
 NEWSLETTER_KEYWORDS = ("newsletter", "subscribe", "subscription")
 
+#: Task requirements that need a pattern rather than a phrase. Alienware Arena asks for
+#: "5 ARP (Alienware Rewards Points) to claim a key", which the keyword list let through.
+TASK_PATTERNS = (
+    re.compile(r"\b\d*\s*arp\b", re.IGNORECASE),
+    re.compile(r"\d+\s*rewards? points\b", re.IGNORECASE),
+)
+
 #: Bluesky posts are unstructured, so a Steam-tagged post only counts when it links
 #: somewhere we can verify. Structured fetchers carry clean links, so they are trusted.
 TRUSTED_STEAM_HOSTS = ("store.steampowered.com", "redd.it", "reddit.com")
@@ -505,7 +512,10 @@ def match_keywords(text: str, keywords: Sequence[str]) -> set[str]:
 
 def requires_tasks(text: str) -> bool:
     """True when the listing asks the user to complete a task (follow, subscribe, ...)."""
-    return bool(match_keywords(text, TASK_KEYWORDS))
+    if match_keywords(text, TASK_KEYWORDS):
+        return True
+
+    return any(pattern.search(text or "") for pattern in TASK_PATTERNS)
 
 
 def is_aggregate_thread(text: str) -> bool:

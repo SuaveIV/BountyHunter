@@ -41,9 +41,6 @@ TITLE_NOISE_WORDS: Final[frozenset[str]] = frozenset(
 TITLE_PARENS_REGEX = re.compile(r"[\(\[\{][^)\]\}]*[\)\]\}]")
 TITLE_NON_ALNUM_REGEX = re.compile(r"[^a-z0-9]+")
 
-#: Minimum share of query tokens that must appear in a fuzzy title match before we trust it.
-TITLE_MATCH_THRESHOLD: Final[float] = 0.6
-
 
 def normalize_title(title: str) -> str:
     """
@@ -67,9 +64,11 @@ def titles_match(query: str, candidate: str) -> bool:
     """
     Loose title equality, for validating fuzzy search results.
 
-    Store and price APIs answer a bad query with their best guess rather than nothing
-    (ITAD happily returns a keyword-stuffed listing for a garbled title), so a returned
-    title has to look like what we asked for before we announce it.
+    Store and price APIs answer a bad query with their best guess rather than nothing (ITAD
+    happily returns a keyword-stuffed listing for a garbled title), so a returned title has
+    to account for every word we searched for. A candidate that only covers part of the
+    query is a different edition, or the base game sitting behind a DLC giveaway, which is
+    how a "Scarlet Crest Armor" giveaway once went out named after the Switch 2 edition.
     """
     wanted = normalize_title(query)
     found = normalize_title(candidate)
@@ -77,12 +76,12 @@ def titles_match(query: str, candidate: str) -> bool:
     if not wanted or not found:
         return False
 
-    if wanted in found or found in wanted:
+    if wanted == found:
         return True
 
-    wanted_tokens = set(wanted.split())
-    overlap = len(wanted_tokens & set(found.split()))
-    return overlap / len(wanted_tokens) >= TITLE_MATCH_THRESHOLD
+    # A candidate may be more specific than the query ("Bounty Train" against "Bounty
+    # Train: The Board Game"), never less.
+    return set(wanted.split()) <= set(found.split())
 
 
 def determine_content_type(text: str) -> str:

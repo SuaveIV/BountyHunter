@@ -87,6 +87,24 @@ async def test_get_fallback_details_basic():
 
 
 @pytest.mark.asyncio
+async def test_get_fallback_details_prefers_the_listing_title():
+    """A long giveaway title should not fall through to the generic "Free Game" name."""
+    links = ["https://www.gamerpower.com/open/witcher-3-scarlet-crest-armor"]
+    text = (
+        "The Witcher 3: Wild Hunt Remastered - Scarlet Crest Armor Giveaway\n"
+        "CD PROJEKT RED has prepared a selection of in-game goodies for The Witcher 3."
+    )
+    manager = MagicMock()
+
+    details = await get_fallback_details(
+        links, text, manager, title="The Witcher 3: Wild Hunt Remastered - Scarlet Crest Armor Giveaway"
+    )
+
+    assert details["name"] == "The Witcher 3: Wild Hunt Remastered - Scarlet Crest Armor Giveaway"
+    assert details["store_url"] == links[0]
+
+
+@pytest.mark.asyncio
 async def test_enhance_details_with_itad_success():
     details = {"name": "Portal", "image": None}
 

@@ -34,11 +34,18 @@ async def enhance_details_with_itad(details: dict[str, Any], itad_manager: ItadA
 
 
 async def get_fallback_details(
-    links: list[str], text: str, itad_manager: ItadAPIManager | None, image: str | None = None
+    links: list[str],
+    text: str,
+    itad_manager: ItadAPIManager | None,
+    image: str | None = None,
+    title: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate basic details from links/text when no specific API manager is available.
     Optionally attempts to fetch missing image from ITAD.
+
+    ``title`` is the listing's own title when the caller has one. It beats re-deriving a name
+    from the post text, which guesses wrong on anything long enough to fail the length check.
     """
     fallback_url = None
     for link in links:
@@ -51,14 +58,14 @@ async def get_fallback_details(
     if not fallback_url:
         return {}
 
-    title = extract_game_title(text) or "Free Game"
+    name = (title or "").strip() or extract_game_title(text) or "Free Game"
 
-    # Heuristic: if title wasn't extracted and text is short, assume text is the title
-    if title == "Free Game" and text and len(text) < 50 and "http" not in text:
-        title = text
+    # Heuristic: if no title is available and the text is short, assume the text is the title
+    if name == "Free Game" and text and len(text) < 50 and "http" not in text:
+        name = text
 
     details = {
-        "name": title,
+        "name": name,
         "store_url": fallback_url,
         "image": image,
     }

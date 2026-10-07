@@ -165,7 +165,7 @@ class TestResolveGameDetails:
             return None
 
         # Mock fallback function to return None
-        async def mock_get_fallback_details(links, text, itad_manager, image=None):
+        async def mock_get_fallback_details(links, text, itad_manager, image=None, title=None):
             return None
 
         # Patch the functions
@@ -286,3 +286,77 @@ class TestResolveGameDetails:
         finally:
             # Restore original function
             utils.get_steam_details = original_steam
+
+
+class TestResolveGameDetailsFuzzyFallback:
+    """A fuzzy ITAD match must never rename the listing."""
+
+    @pytest.mark.asyncio
+    async def test_unverified_itad_match_falls_back_to_the_listing_title(self):
+        from bounty_core.itad_api_manager import ItadAPIManager
+
+        itad = ItadAPIManager(session=MagicMock(), api_key="test-key")
+        # ITAD answers the DLC title with a different edition of the base game.
+        itad.search_game = AsyncMock(
+            return_value=[{"id": "1", "title": "The Witcher 3: Wild Hunt — Remastered - Nintendo Switch 2"}]
+        )
+
+        mock_bot = MagicMock()
+        mock_bot.steam_manager = None
+        mock_bot.epic_manager = None
+        mock_bot.itch_manager = None
+        mock_bot.ps_manager = None
+        mock_bot.gog_manager = None
+        mock_bot.itad_manager = itad
+
+        listing_title = "The Witcher 3: Wild Hunt Remastered - Scarlet Crest Armor Giveaway"
+        parsed_data = {
+            "title": listing_title,
+            "text": f"{listing_title}\nCD PROJEKT RED has prepared a selection of in-game goodies.",
+            "links": ["https://www.gamerpower.com/open/the-witcher-3-scarlet-crest-armor-giveaway"],
+            "steam_app_ids": [],
+            "epic_slugs": [],
+            "itch_urls": [],
+            "ps_urls": [],
+            "gog_urls": [],
+            "type": "ITEM",
+            "content_type": "dlc",
+        }
+
+        details = await resolve_game_details(mock_bot, parsed_data)
+
+        assert details is not None
+        assert details["name"] == listing_title
+
+    @pytest.mark.asyncio
+    async def test_matching_itad_title_is_still_used(self):
+        from bounty_core.itad_api_manager import ItadAPIManager
+
+        itad = ItadAPIManager(session=MagicMock(), api_key="test-key")
+        itad.search_game = AsyncMock(return_value=[{"id": "1", "title": "Spooky Cats", "assets": {}}])
+
+        mock_bot = MagicMock()
+        mock_bot.steam_manager = None
+        mock_bot.epic_manager = None
+        mock_bot.itch_manager = None
+        mock_bot.ps_manager = None
+        mock_bot.gog_manager = None
+        mock_bot.itad_manager = itad
+
+        parsed_data = {
+            "title": "Spooky Cats Steam Key Giveaway",
+            "text": "Spooky Cats Steam Key Giveaway\nFanatical is giving away Spooky Cats Steam keys for free!",
+            "links": ["https://www.gamerpower.com/open/spooky-cats-steam-key-giveaway"],
+            "steam_app_ids": [],
+            "epic_slugs": [],
+            "itch_urls": [],
+            "ps_urls": [],
+            "gog_urls": [],
+            "type": "GAME",
+            "content_type": "game",
+        }
+
+        details = await resolve_game_details(mock_bot, parsed_data)
+
+        assert details is not None
+        assert details["name"] == "Spooky Cats"

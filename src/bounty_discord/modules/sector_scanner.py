@@ -84,6 +84,25 @@ def _epic_mobile_links(links: list[str]) -> dict[str, str]:
     return mobile
 
 
+def _listing_text(game: FreeGame) -> str:
+    """
+    Title plus body, without printing the title twice.
+
+    Epic and GamerPower put the title at the start of their text, and a Bluesky post repeats
+    it inside its own opening line, so the title only gets prepended when the body does not
+    already open with it.
+    """
+    body = (game.text or "").strip()
+    if not body:
+        return game.title
+
+    first_line = body.splitlines()[0]
+    if game.title.lower() in first_line.lower():
+        return body
+
+    return f"{game.title}\n{body}"
+
+
 def parsed_from_free_game(game: FreeGame) -> dict[str, Any]:
     """Translate a normalized :class:`FreeGame` into the parsed dict the visor renders."""
     links = _listing_links(game)
@@ -92,7 +111,7 @@ def parsed_from_free_game(game: FreeGame) -> dict[str, Any]:
     return {
         "uri": game.dedupe_key,
         "title": game.title,
-        "text": f"{game.title}\n{game.text}" if game.text else game.title,
+        "text": _listing_text(game),
         "source": game.source,
         "source_id": game.source_id,
         "content_type": game.content_type,

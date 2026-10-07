@@ -148,6 +148,39 @@ async def test_scan_ignore_seen_bypasses_seeding_and_dedupe_store():
     store.mark_post_seen.assert_not_called()
 
 
+def test_parsed_from_free_game_does_not_repeat_the_title():
+    # Epic and GamerPower put the title at the start of their text field.
+    gamerpower = make_game(
+        source="gamerpower",
+        title="NIGHTBELL (Itch.io) Giveaway",
+        url="https://www.gamerpower.com/open/nightbell",
+        platforms={"itch"},
+        text="NIGHTBELL (Itch.io) Giveaway\nDownload NIGHTBELL for free on Itch.io until September 30th.",
+    )
+    # Bluesky repeats it inside the post's own opening line.
+    bluesky = make_game(
+        source="bluesky",
+        title="Blair Witch",
+        url="https://redd.it/1x026p2",
+        platforms={"steam"},
+        text=(
+            "[Steam] (Game) Blair Witch is free! See the /r/FreeGameFindings thread below.\n\n"
+            "#FGF #FreeGameFindings #Free\n\nhttps://redd.it/1x026p2"
+        ),
+    )
+
+    for game in (gamerpower, bluesky):
+        text = parsed_from_free_game(game)["text"]
+        assert text.count(game.title) == 1
+        assert text.startswith(game.text.splitlines()[0])
+
+
+def test_parsed_from_free_game_prepends_a_missing_title():
+    game = make_game(title="Blair Witch", text="No title in this body", url="https://redd.it/abc")
+
+    assert parsed_from_free_game(game)["text"] == "Blair Witch\nNo title in this body"
+
+
 def test_parsed_from_free_game_collects_store_links_from_body():
     game = make_game(
         source="bluesky",

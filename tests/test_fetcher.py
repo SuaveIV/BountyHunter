@@ -148,6 +148,17 @@ def test_requires_tasks():
     assert not requires_tasks("Portal is free until Friday")
 
 
+def test_requires_tasks_catches_alienware_reward_points():
+    """Alienware asks for "5 ARP (Alienware Rewards Points) to claim a key"."""
+    listing = (
+        "Redeem the 007 First Light: Ops Radiant Outfit Key to unlock the Ops Radiant outfit for 007. "
+        "Please note this giveaway requires 5 ARP (Alienware Rewards Points) to claim a key."
+    )
+    assert requires_tasks(listing)
+    assert requires_tasks("Earn 2500 Rewards Points for this key")
+    assert not requires_tasks("Grab the key before the offer expires")
+
+
 def test_task_exempt_covers_gog_and_fanatical_newsletters():
     gog = make_game(
         title="Free on GOG",
@@ -321,9 +332,22 @@ def test_parse_bluesky_feed_skips_aggregate_and_untagged_posts():
 
 def test_titles_match_accepts_real_matches():
     assert titles_match("Blair Witch", "Blair Witch")
-    assert titles_match("Fanatical - Spooky Cats", "Spooky Cats")
     assert titles_match("buried stars", "BURIED STARS")
     assert titles_match("Bounty Train", "Bounty Train: The Board Game")
+    assert titles_match("Spooky Cats Steam Key Giveaway", "Spooky Cats")
+    assert titles_match("NIGHTBELL (Itch.io) Giveaway", "NIGHTBELL")
+
+
+def test_titles_match_rejects_partial_editions_and_base_games():
+    # Every case below reached the channel with the wrong game name: the query lost the
+    # words that identified the actual giveaway, and the candidate filled the gap.
+    assert not titles_match(
+        "The Witcher 3: Wild Hunt Remastered - Scarlet Crest Armor Giveaway",
+        "The Witcher 3: Wild Hunt — Remastered - Nintendo Switch 2",
+    )
+    assert not titles_match("GOALS: AMD Kit Key Giveaway", "GOALS")
+    assert not titles_match("007 First Light: Ops Radiant Outfit Key Giveaway", "007 First Light")
+    assert not titles_match("Fanatical - Spooky Cats", "Spooky Cats")
 
 
 def test_titles_match_rejects_unrelated_best_guesses():
