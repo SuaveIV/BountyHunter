@@ -1,4 +1,5 @@
 import re
+from typing import Final
 
 from bs4 import BeautifulSoup
 
@@ -14,6 +15,74 @@ FGF_TITLE_REGEX = re.compile(r"^[\[\(].*?[\]\)]\s*(?:\(.*?\)\s*)?(.+?) is free",
 FGF_PSA_REGEX = re.compile(r"^\[PSA\]\s*(.+?)\s*(?:are|is) complimentary", re.IGNORECASE | re.MULTILINE)
 FGF_TYPE_REGEX = re.compile(r"\[.*?\]\s*\((.*?)\)", re.IGNORECASE)
 PSA_CHECK_REGEX = re.compile(r"^\[PSA\]", re.IGNORECASE)
+
+# --- Title normalization ----------------------------------------------------
+
+#: Noise words stripped before comparing titles: the filler words and storefront names that
+#: show up in "X (Epic Games) Giveaway" style listings.
+TITLE_NOISE_WORDS: Final[frozenset[str]] = frozenset(
+    {
+        "amazon",
+        "epic",
+        "epicgames",
+        "free",
+        "freebie",
+        "game",
+        "games",
+        "giveaway",
+        "gog",
+        "itch",
+        "key",
+        "prime",
+        "steam",
+    }
+)
+
+TITLE_PARENS_REGEX = re.compile(r"[\(\[\{][^)\]\}]*[\)\]\}]")
+TITLE_NON_ALNUM_REGEX = re.compile(r"[^a-z0-9]+")
+
+#: Minimum share of query tokens that must appear in a fuzzy title match before we trust it.
+TITLE_MATCH_THRESHOLD: Final[float] = 0.6
+
+
+def normalize_title(title: str) -> str:
+    """
+    Reduce a listing title to a comparison key.
+
+    Parentheticals are dropped ("BURIED STARS (Epic Games) Giveaway" -> "buried stars"),
+    followed by punctuation and a small set of noise words. The heuristic merges
+    generously, which is what we want for duplicates, but it will occasionally merge two
+    differently titled listings for the same game.
+    """
+    if not title:
+        return ""
+
+    cleaned = TITLE_PARENS_REGEX.sub(" ", title.lower())
+    cleaned = TITLE_NON_ALNUM_REGEX.sub(" ", cleaned)
+    words = [word for word in cleaned.split() if word not in TITLE_NOISE_WORDS]
+    return " ".join(words)
+
+
+def titles_match(query: str, candidate: str) -> bool:
+    """
+    Loose title equality, for validating fuzzy search results.
+
+    Store and price APIs answer a bad query with their best guess rather than nothing
+    (ITAD happily returns a keyword-stuffed listing for a garbled title), so a returned
+    title has to look like what we asked for before we announce it.
+    """
+    wanted = normalize_title(query)
+    found = normalize_title(candidate)
+
+    if not wanted or not found:
+        return False
+
+    if wanted in found or found in wanted:
+        return True
+
+    wanted_tokens = set(wanted.split())
+    overlap = len(wanted_tokens & set(found.split()))
+    return overlap / len(wanted_tokens) >= TITLE_MATCH_THRESHOLD
 
 
 def determine_content_type(text: str) -> str:

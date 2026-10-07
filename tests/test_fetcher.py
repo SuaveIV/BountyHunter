@@ -20,8 +20,10 @@ from bounty_core.fetcher import (
     fetch_all_games,
     fetch_json,
     filter_games,
+    is_aggregate_post,
+    is_aggregate_thread,
+    is_listing_tag,
     is_task_exempt,
-    normalize_title,
     parse_bluesky_feed,
     parse_bluesky_post,
     parse_gamerpower_giveaway,
@@ -32,6 +34,7 @@ from bounty_core.fetcher import (
     requires_tasks,
     split_bluesky_title,
 )
+from bounty_core.parser import normalize_title, titles_match
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
 
@@ -224,6 +227,115 @@ def test_filter_games_drops_and_counts():
     accepted = filter_games(games)
 
     assert [game.source_id for game in accepted] == ["1"]
+
+
+# --- Aggregate threads (weekly / mega threads) -------------------------------
+
+
+def test_is_aggregate_thread():
+    assert is_aggregate_thread("Exiled Giveaways and Itch.io Mega Threads")
+    assert is_aggregate_thread("exiled_giveaways_and_itchio_mega_threads")
+    assert is_aggregate_thread("Free Game Findings Weekly Thread - Week of Jan 5")
+    assert is_aggregate_thread("Mega Giveaway Thread")
+    assert not is_aggregate_thread("Blair Witch")
+
+
+def test_is_aggregate_post():
+    # The weekly thread, tagged or not.
+    assert is_aggregate_post("[Weekly Thread] Free Game Findings - Week of Jan 5")
+    assert is_aggregate_post("Exiled Giveaways and Itch.io Mega Threads")
+    # Other non-giveaway post types.
+    assert is_aggregate_post("[Meta] Subreddit rules update")
+    assert is_aggregate_post("[PSA] Some stores are complimentary this week")
+    # A listing whose title happens to contain the words is still a listing.
+    assert not is_aggregate_post("[Steam] (Game) Weekly Thread Simulator is free!")
+    assert not is_aggregate_post("[Steam] (Game) Blair Witch is free!")
+
+
+def test_is_listing_tag():
+    assert is_listing_tag("Steam", "Game")
+    assert is_listing_tag("Steam", "")
+    assert is_listing_tag("DLsite", "Game")
+    assert not is_listing_tag("", "")
+    assert not is_listing_tag("Weekly Thread", "")
+
+
+def test_rejection_reason_drops_aggregate_threads():
+    mega_thread = make_game(
+        title="Exiled Giveaways and Itch.io Mega Threads",
+        url="https://redd.it/1wydw69",
+        platforms={"steam", "epic", "gog"},
+        text="Warlock 2: The Exiled is free! https://store.steampowered.com/app/205990/",
+    )
+    assert rejection_reason(mega_thread) == "aggregate thread"
+
+
+def test_parse_bluesky_feed_skips_aggregate_and_untagged_posts():
+    feed = {
+        "feed": [
+            {
+                "post": {
+                    "uri": "at://did:plc:abc/app.bsky.feed.post/mega",
+                    "record": {
+                        "text": (
+                            "Exiled Giveaways and Itch.io Mega Threads\n\n"
+                            "https://redd.it/1wydw69\n\nWarlock 2: The Exiled is free!\n"
+                            "https://store.steampowered.com/app/205990/"
+                        )
+                    },
+                }
+            },
+            {
+                "post": {
+                    "uri": "at://did:plc:abc/app.bsky.feed.post/weekly",
+                    "record": {"text": "[Weekly Thread] Week of January 5 - post your findings below"},
+                }
+            },
+            {
+                "post": {
+                    "uri": "at://did:plc:abc/app.bsky.feed.post/event",
+                    "record": {"text": "A new #FGF #Giveaway! See the event on FGF for 30 Steam keys."},
+                }
+            },
+            {
+                "post": {
+                    "uri": "at://did:plc:abc/app.bsky.feed.post/listing",
+                    "record": {
+                        "text": "[Steam] (Game) Blair Witch is free! See the /r/FreeGameFindings thread below.",
+                        "facets": [
+                            {"features": [{"$type": "app.bsky.richtext.facet#link", "uri": "https://redd.it/1x026p2"}]}
+                        ],
+                    },
+                }
+            },
+        ]
+    }
+
+    games = parse_bluesky_feed(feed)
+
+    assert [game.title for game in games] == ["Blair Witch"]
+
+
+# --- Fuzzy title matching ---------------------------------------------------
+
+
+def test_titles_match_accepts_real_matches():
+    assert titles_match("Blair Witch", "Blair Witch")
+    assert titles_match("Fanatical - Spooky Cats", "Spooky Cats")
+    assert titles_match("buried stars", "BURIED STARS")
+    assert titles_match("Bounty Train", "Bounty Train: The Board Game")
+
+
+def test_titles_match_rejects_unrelated_best_guesses():
+    # ITAD answers a garbled query with its best guess rather than nothing.
+    assert not titles_match(
+        "Exiled Giveaways and Itch.io Mega Threads",
+        "FIRST STEAM GAME VHS - COLOR RETRO RACER : MILES CHALLENGE",
+    )
+    assert not titles_match("Blair Witch", "FIRST STEAM GAME VHS - COLOR RETRO RACER : MILES CHALLENGE")
+    assert not titles_match("Hex Reverse", "Hex Shooter")
+    assert not titles_match("", "Blair Witch")
+    assert not titles_match("Blair Witch", "")
 
 
 # --- Fake HTTP --------------------------------------------------------------

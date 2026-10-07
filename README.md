@@ -14,7 +14,9 @@ The scanner fans several independent, keyless feeds in, keeps going when one of 
 
 Reddit's own RSS feed is no longer polled: Reddit is retiring RSS (Nov 2026) and public API access (Mar 2027), and the feed already returns 403s.
 
-Listings are normalized into one `FreeGame` model, filtered (excluded keywords, task giveaways, blocked domains, platform whitelist, Steam link trust), and deduplicated by source id and by normalized title, so the same game found by two sources is announced once. The first run against an empty database seeds the existing listings instead of dumping the whole backlog into the channel.
+Listings are normalized into one `FreeGame` model, filtered (aggregate threads, excluded keywords, task giveaways, blocked domains, platform whitelist, Steam link trust), and deduplicated by source id and by normalized title, so the same game found by two sources is announced once. The first run against an empty database seeds the existing listings instead of dumping the whole backlog into the channel.
+
+FGF's weekly thread and its themed "mega threads" are not listings — they are single posts that link to a pile of stores, so resolving one would announce whichever game happened to be linked first. They are detected and skipped explicitly. Fuzzy title lookups (ITAD) are validated against the listing title too, so a lookup that fails stays a failure instead of announcing an unrelated game.
 
 ## Features
 

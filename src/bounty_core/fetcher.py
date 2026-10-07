@@ -41,6 +41,7 @@ from bs4 import BeautifulSoup
 
 from bounty_core.constants import DENY_DOMAINS
 from bounty_core.network import HEADERS
+from bounty_core.parser import normalize_title
 from bounty_core.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -241,46 +242,8 @@ class FreeGame:
         return normalize_title(self.title)
 
 
-# Noise words stripped from titles before cross-source comparison: the filler words and
-# storefront names that show up in "X (Epic Games) Giveaway" style titles.
-TITLE_NOISE_WORDS = frozenset(
-    {
-        "amazon",
-        "epic",
-        "epicgames",
-        "free",
-        "freebie",
-        "game",
-        "games",
-        "giveaway",
-        "gog",
-        "itch",
-        "key",
-        "prime",
-        "steam",
-    }
-)
-
-TITLE_PARENS_REGEX = re.compile(r"[\(\[\{][^)\]\}]*[\)\]\}]")
-TITLE_NON_ALNUM_REGEX = re.compile(r"[^a-z0-9]+")
-
-
-def normalize_title(title: str) -> str:
-    """
-    Reduce a listing title to a comparison key.
-
-    Parentheticals are dropped ("BURIED STARS (Epic Games) Giveaway" -> "buried stars"),
-    followed by punctuation and a small set of noise words. The heuristic merges
-    generously, which is what we want for duplicates, but it will occasionally merge two
-    differently titled listings for the same game.
-    """
-    if not title:
-        return ""
-
-    cleaned = TITLE_PARENS_REGEX.sub(" ", title.lower())
-    cleaned = TITLE_NON_ALNUM_REGEX.sub(" ", cleaned)
-    words = [word for word in cleaned.split() if word not in TITLE_NOISE_WORDS]
-    return " ".join(words)
+# Noise words stripped from titles before cross-source comparison live in
+# :mod:`bounty_core.parser` (see ``normalize_title``), alongside the other text heuristics.
 
 
 def dedupe_games(games: Sequence[FreeGame]) -> list[FreeGame]:
@@ -473,6 +436,23 @@ def classify_gamerpower_type(raw_type: str, title: str = "") -> str:
 
 EXCLUDED_KEYWORDS = ("expired", "raffle", "sweepstake")
 
+#: FGF's weekly thread and its themed "mega threads" ("Exiled Giveaways and Itch.io Mega
+#: Threads") collect a pile of giveaways in one post. They are not listings: they carry no
+#: platform tag, their body links to every store going, so resolving one announces whichever
+#: game happened to be linked first.
+AGGREGATE_THREAD_PHRASES = (
+    "weekly thread",
+    "weekly discussion",
+    "weekly roundup",
+    "giveaway thread",
+    "giveaways thread",
+    "mega giveaway thread",
+    "giveaway mega thread",
+    "mega thread",
+    "mega threads",
+    "megathread",
+)
+
 TASK_KEYWORDS = (
     "newsletter",
     "subscribe",
@@ -525,6 +505,12 @@ def requires_tasks(text: str) -> bool:
     return bool(match_keywords(text, TASK_KEYWORDS))
 
 
+def is_aggregate_thread(text: str) -> bool:
+    """True for FGF weekly/mega threads, which aggregate giveaways instead of being one."""
+    normalized = re.sub(r"[_\-]+", " ", (text or "").lower())
+    return any(phrase in normalized for phrase in AGGREGATE_THREAD_PHRASES)
+
+
 def is_task_exempt(game: FreeGame) -> bool:
     """
     Newsletter giveaways from GOG and Fanatical are allowed through.
@@ -547,12 +533,16 @@ def rejection_reason(game: FreeGame) -> str | None:
     """
     Explain why a listing should be dropped, or ``None`` when it should be announced.
 
-    Filters are applied in order: excluded keywords, task giveaways, blocked domains, the
-    platform whitelist, and finally the Bluesky Steam trust rule. The whitelist is what
-    drops the mobile, STOVE, VR and DRM-free-only listings GamerPower returns.
+    Filtering runs in order: aggregate threads, excluded keywords, task giveaways, blocked
+    domains, the platform whitelist, and finally the Bluesky Steam trust rule. The
+    whitelist is what drops the mobile, STOVE, VR and DRM-free-only listings GamerPower
+    returns.
     """
     text = game.text or ""
     lowered_text = text.lower()
+
+    if is_aggregate_thread(game.title) or is_aggregate_thread(game.url):
+        return "aggregate thread"
 
     if any(keyword in lowered_text for keyword in EXCLUDED_KEYWORDS):
         return "excluded keyword"
@@ -785,6 +775,44 @@ BLUESKY_URL_REGEX = re.compile(r"https?://[^\s\)\]<>]+")
 BLUESKY_BOILERPLATE_REGEX = re.compile(r"\s*see the .*?thread.*$", re.IGNORECASE)
 BLUESKY_FREE_SUFFIX_REGEX = re.compile(r"\s*(?:is|are)\s+(?:now\s+)?free!?\s*$", re.IGNORECASE)
 
+#: The same posts when they are tagged differently, e.g. "[Meta] Subreddit rules update".
+BLUESKY_NON_LISTING_TAGS = frozenset(
+    {
+        "announcement",
+        "discussion",
+        "meta",
+        "mod post",
+        "news",
+        "psa",
+        "question",
+        "weekly",
+        "weekly thread",
+    }
+)
+
+
+def is_aggregate_post(text: str) -> bool:
+    """
+    True for the FGF weekly thread and its other non-giveaway posts.
+
+    These are discussion posts rather than listings: they carry no platform tag and their
+    bodies link to a pile of stores, so resolving one announces an arbitrary game.
+    """
+    stripped = (text or "").strip()
+    tag_match = BLUESKY_PLATFORM_TAG_REGEX.match(stripped)
+    tag = tag_match.group(1).strip().lower() if tag_match else ""
+
+    if tag:
+        return tag in BLUESKY_NON_LISTING_TAGS or is_aggregate_thread(tag)
+
+    first_line = stripped.splitlines()[0] if stripped else ""
+    return is_aggregate_thread(first_line)
+
+
+def is_listing_tag(platform_tag: str, content_tag: str) -> bool:
+    """A listing carries either a known platform tag or a (Game)/(DLC)/(Other) marker."""
+    return bool(platforms_from_text(platform_tag) or content_tag.strip())
+
 
 def strip_query_string(url: str) -> str:
     """Drop query strings and fragments, which carry per-visit tracking on Reddit links."""
@@ -848,7 +876,7 @@ def bluesky_listing_url(record: dict[str, Any], post: dict[str, Any]) -> str:
 
 
 def parse_bluesky_post(item: dict[str, Any]) -> FreeGame | None:
-    """Normalize a single post from the author feed, skipping replies."""
+    """Normalize a single post from the author feed, skipping replies and aggregate threads."""
     post = (item or {}).get("post") or {}
     record = post.get("record") or {}
 
@@ -857,7 +885,19 @@ def parse_bluesky_post(item: dict[str, Any]) -> FreeGame | None:
         return None
 
     text = str(record.get("text") or "").strip()
+    if not text:
+        return None
+
+    # The weekly thread and other discussion posts are not giveaways; skip them before any
+    # link in their body can be resolved as "the" free game.
+    if is_aggregate_post(text):
+        logger.debug(f"Skipping FGF aggregate post: {text.splitlines()[0][:80]}")
+        return None
+
     platform_tag, content_tag, title = split_bluesky_title(text)
+    if not is_listing_tag(platform_tag, content_tag):
+        logger.debug(f"Skipping untagged Bluesky post: {text.splitlines()[0][:80]}")
+        return None
     if not title:
         return None
 

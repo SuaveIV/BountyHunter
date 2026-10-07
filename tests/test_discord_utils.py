@@ -29,7 +29,9 @@ async def test_create_game_embed_steam():
     assert embed.url == details["store_url"]
     assert embed.color and embed.color.value == 65280  # Green #00FF00
     assert embed.description == "A cool game"
-    assert embed.image.url == "http://img.com/123"
+    # Image embedding was deliberately removed: the store/Reddit thumbnails were often
+    # wrong. The embed should not set one, even when details carry an image.
+    assert embed.image.url is None
 
     # Check fields
     fields = {f.name: f.value for f in embed.fields}

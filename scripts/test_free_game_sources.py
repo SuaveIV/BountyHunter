@@ -79,6 +79,18 @@ OFFLINE_BLUESKY = {
                 },
             }
         },
+        {
+            # An FGF mega thread: not a listing, and its body links to plenty of stores.
+            "post": {
+                "uri": "at://did:plc:abc/app.bsky.feed.post/3",
+                "record": {
+                    "text": (
+                        "Exiled Giveaways and Itch.io Mega Threads\n\n"
+                        "Warlock 2: The Exiled is free!\nhttps://store.steampowered.com/app/205990/"
+                    )
+                },
+            }
+        },
     ]
 }
 
