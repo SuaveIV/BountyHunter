@@ -115,11 +115,10 @@ class ItadAPIManager:
         Convenience method to search for a game and get its best price details.
         Returns a dict containing 'game_info' and 'price_info' if found.
         """
-        games = await self.search_game(title, limit=1)
-        if not games:
+        game = await self.search_verified(title)
+        if not game:
             return None
 
-        game = games[0]
         game_id = game["id"]
 
         overview = await self.get_game_overview([game_id], country=country)
@@ -157,11 +156,11 @@ class ItadAPIManager:
 
         # 2. Try Epic Slug (via search)
         if not game and epic_slugs:
-            game = await self._search_verified(epic_slugs[0].replace("-", " "))
+            game = await self.search_verified(epic_slugs[0].replace("-", " "))
 
         # 3. Try Title
         if not game and title:
-            game = await self._search_verified(title)
+            game = await self.search_verified(title)
 
         if game:
             assets = game.get("assets", {})
@@ -179,7 +178,7 @@ class ItadAPIManager:
             }
         return None
 
-    async def _search_verified(self, title: str) -> dict | None:
+    async def search_verified(self, title: str) -> dict | None:
         """Search ITAD by title and return the best candidate that actually matches it."""
         if not title:
             return None

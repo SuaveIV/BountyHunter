@@ -62,3 +62,24 @@ async def test_find_game_returns_none_without_ids_or_title():
 
     assert await manager.find_game() is None
     assert await manager.find_game(title="") is None
+
+
+@pytest.mark.asyncio
+async def test_get_best_price_refuses_an_unrelated_match():
+    """`!price <garbage>` should report nothing rather than another game's price."""
+    manager = make_manager([{"id": "1", "title": VHS_TROLL_GAME}])
+    manager.get_game_overview = AsyncMock(return_value={"prices": [{"id": "1", "current": {"amount": 0}}]})
+
+    assert await manager.get_best_price("asdkjhasd") is None
+    manager.get_game_overview.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_best_price_accepts_a_matching_game():
+    manager = make_manager([{"id": "1", "title": "Portal"}])
+    manager.get_game_overview = AsyncMock(return_value={"prices": [{"id": "1", "current": {"amount": 9.99}}]})
+
+    best = await manager.get_best_price("Portal")
+
+    assert best is not None
+    assert best["game_info"]["title"] == "Portal"
