@@ -12,7 +12,7 @@ The scanner fans several independent, keyless feeds in, keeps going when one of 
 | GamerPower       | `/api/giveaways?type=game` and `?type=loot` | Queried once per type; the API rejects multi-type queries and 404s on `dlc`/`beta`. Attribution required, max 10 req/s. |
 | Bluesky          | `freegamefindings.bsky.social`              | Mirror of r/FreeGameFindings. Links point at Reddit threads, not stores.                                                |
 
-Reddit's own RSS feed is no longer polled: Reddit is retiring RSS (Nov 2026) and public API access (Mar 2027), and the feed already returns 403s.
+Reddit's own RSS feed is no longer polled: Reddit is retiring RSS (Nov 2026) and public API access (Mar 2027), and the feed already returns 403s. Its fetcher is kept in `bounty_core/fetcher.py` rather than deleted, so it can be adapted back into the fan-in if the feed recovers before Reddit retires it for good.
 
 Listings are normalized into one `FreeGame` model, filtered (aggregate threads, excluded keywords, task giveaways, blocked domains, platform whitelist, Steam link trust), and deduplicated by source id and by normalized title, so the same game found by two sources is announced once. The first run against an empty database seeds the existing listings instead of dumping the whole backlog into the channel.
 

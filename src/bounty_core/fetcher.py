@@ -9,7 +9,10 @@ Sources (all keyless):
 
 * :class:`RedditRSSFetcher` - the original r/FreeGameFindings RSS scrape. Reddit is
   retiring RSS (Nov 2026) and public API access (Mar 2027), and the feed already 403s, so
-  it is no longer wired into the scanner.
+  it is no longer wired into the scanner. It is deliberately kept until Reddit fully pulls
+  the plug rather than deleted: the fan-in only takes fetchers that return normalized
+  listings, and this one still returns raw feed dicts, so re-enabling it means adapting it
+  to :class:`FreeGamesFetcher` and adding it to :data:`DEFAULT_FETCHERS`.
 * :class:`EpicFreeGamesFetcher` - Epic's public ``freeGamesPromotions`` endpoint. Gives
   direct store links.
 * :class:`GamerPowerFreeGamesFetcher` - GamerPower's ``giveaways`` API, queried once for
