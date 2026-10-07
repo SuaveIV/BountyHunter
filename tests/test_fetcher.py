@@ -9,6 +9,8 @@ from bounty_core.fetcher import (
     CONTENT_DLC,
     CONTENT_GAME,
     CONTENT_ITEM,
+    CONTENT_TYPES,
+    DEFAULT_CONTENT_TYPES,
     EpicFreeGamesFetcher,
     FreeGame,
     GamerPowerFreeGamesFetcher,
@@ -26,6 +28,7 @@ from bounty_core.fetcher import (
     is_task_exempt,
     parse_bluesky_feed,
     parse_bluesky_post,
+    parse_content_types,
     parse_gamerpower_giveaway,
     parse_gamerpower_giveaways,
     parse_retry_after,
@@ -148,6 +151,17 @@ def test_requires_tasks():
     assert not requires_tasks("Portal is free until Friday")
 
 
+def test_requires_tasks_catches_alienware_reward_points():
+    """Alienware asks for "5 ARP (Alienware Rewards Points) to claim a key"."""
+    listing = (
+        "Redeem the 007 First Light: Ops Radiant Outfit Key to unlock the Ops Radiant outfit for 007. "
+        "Please note this giveaway requires 5 ARP (Alienware Rewards Points) to claim a key."
+    )
+    assert requires_tasks(listing)
+    assert requires_tasks("Earn 2500 Rewards Points for this key")
+    assert not requires_tasks("Grab the key before the offer expires")
+
+
 def test_task_exempt_covers_gog_and_fanatical_newsletters():
     gog = make_game(
         title="Free on GOG",
@@ -227,6 +241,38 @@ def test_filter_games_drops_and_counts():
     accepted = filter_games(games)
 
     assert [game.source_id for game in accepted] == ["1"]
+
+
+# --- Content type policy ----------------------------------------------------
+
+
+def test_parse_content_types():
+    assert parse_content_types(None) == {CONTENT_GAME}
+    assert parse_content_types("") == {CONTENT_GAME}
+    assert parse_content_types("game") == {CONTENT_GAME}
+    assert parse_content_types("Game, DLC") == {CONTENT_GAME, CONTENT_DLC}
+    assert parse_content_types("games,dlcs,loot,playtest") == {CONTENT_GAME, CONTENT_DLC, CONTENT_ITEM, CONTENT_BETA}
+    # A setting that names nothing recognisable falls back rather than muting the channel.
+    assert parse_content_types("nonsense") == {CONTENT_GAME}
+    assert parse_content_types("game,nonsense") == {CONTENT_GAME}
+
+
+def test_filter_games_honours_the_content_type_policy():
+    games = [
+        make_game(source_id="1", title="A Game", content_type=CONTENT_GAME),
+        make_game(source_id="2", title="A DLC", content_type=CONTENT_DLC),
+        make_game(source_id="3", title="A Skin", content_type=CONTENT_ITEM),
+        make_game(source_id="4", title="A Playtest", content_type=CONTENT_BETA),
+    ]
+
+    default = filter_games(games, DEFAULT_CONTENT_TYPES)
+    everything = filter_games(games, CONTENT_TYPES)
+
+    assert [game.source_id for game in default] == ["1"]
+    assert [game.source_id for game in everything] == ["1", "2", "3", "4"]
+    assert rejection_reason(games[1], DEFAULT_CONTENT_TYPES) == "content type not enabled"
+    # No policy means no content-type filtering, which is the core's default.
+    assert len(filter_games(games)) == 4
 
 
 # --- Aggregate threads (weekly / mega threads) -------------------------------
@@ -321,9 +367,22 @@ def test_parse_bluesky_feed_skips_aggregate_and_untagged_posts():
 
 def test_titles_match_accepts_real_matches():
     assert titles_match("Blair Witch", "Blair Witch")
-    assert titles_match("Fanatical - Spooky Cats", "Spooky Cats")
     assert titles_match("buried stars", "BURIED STARS")
     assert titles_match("Bounty Train", "Bounty Train: The Board Game")
+    assert titles_match("Spooky Cats Steam Key Giveaway", "Spooky Cats")
+    assert titles_match("NIGHTBELL (Itch.io) Giveaway", "NIGHTBELL")
+
+
+def test_titles_match_rejects_partial_editions_and_base_games():
+    # Every case below reached the channel with the wrong game name: the query lost the
+    # words that identified the actual giveaway, and the candidate filled the gap.
+    assert not titles_match(
+        "The Witcher 3: Wild Hunt Remastered - Scarlet Crest Armor Giveaway",
+        "The Witcher 3: Wild Hunt — Remastered - Nintendo Switch 2",
+    )
+    assert not titles_match("GOALS: AMD Kit Key Giveaway", "GOALS")
+    assert not titles_match("007 First Light: Ops Radiant Outfit Key Giveaway", "007 First Light")
+    assert not titles_match("Fanatical - Spooky Cats", "Spooky Cats")
 
 
 def test_titles_match_rejects_unrelated_best_guesses():

@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from bounty_core.exceptions import (
     AccessDenied,
     APIError,
+    BountyException,
     GameNotFound,
     NetworkError,
     RateLimitExceeded,
@@ -18,6 +19,9 @@ from bounty_core.parser import extract_og_data
 from bounty_core.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
+
+#: Placeholder used when the store page loads but exposes no metadata.
+UNKNOWN_EPIC_NAME = "Unknown Epic Game"
 
 
 class EpicAPIManager:
@@ -91,16 +95,104 @@ class EpicAPIManager:
             logger.warning(f"Epic CMS API failed for {slug}: {e}")
 
         # 2. Fallback: Scrape HTML
-        return await self._scrape_store_page(slug)
+        scraped = None
+        try:
+            scraped = await self._scrape_store_page(slug)
+        except BountyException as e:
+            # The store page sits behind a WAF for a lot of products: a 403, or a 200 that
+            # renders client side and carries no og:title.
+            logger.warning(f"Epic store page unusable for {slug} ({type(e).__name__}: {e})")
+
+        if self._has_name(scraped):
+            return scraped
+
+        # 3. Fallback: the promotions feed. It is the one Epic endpoint that answers
+        # consistently, and it carries the title, description and key art for free titles.
+        promoted = await self._promotion_details(slug)
+        if promoted:
+            return promoted
+
+        # A details dict with no usable name would block the ITAD and generic fallbacks
+        # upstream, which is how these listings ended up as bare text messages.
+        return None
+
+    @staticmethod
+    def _has_name(details: dict | None) -> bool:
+        name = str((details or {}).get("name") or "").strip()
+        return bool(name) and name != UNKNOWN_EPIC_NAME
+
+    @staticmethod
+    def _promotion_slugs(element: dict) -> set[str]:
+        """Every slug an Epic catalog element answers to."""
+        slugs = set()
+
+        for mapping in element.get("offerMappings") or []:
+            page = (mapping or {}).get("page") or {}
+            page_slug = page.get("slug")
+            if page_slug:
+                slugs.add(str(page_slug).strip("/").lower())
+
+        for key in ("productSlug", "urlSlug"):
+            value = element.get(key)
+            if value:
+                slugs.add(str(value).removesuffix("/home").strip("/").lower())
+
+        return slugs
+
+    def _find_promotion(self, slug: str) -> dict | None:
+        """Find the cached promotions entry for a slug."""
+        wanted = slug.strip().strip("/").lower()
+        if not wanted:
+            return None
+
+        for element in self.free_games_cache:
+            if wanted in self._promotion_slugs(element):
+                return element
+
+        return None
+
+    @staticmethod
+    def _promotion_image(element: dict) -> str | None:
+        for wanted in ("OfferImageWide", "DieselStoreFrontWide", "Thumbnail"):
+            for image in element.get("keyImages") or []:
+                if (image or {}).get("type") == wanted and image.get("url"):
+                    return str(image["url"])
+        return None
+
+    async def _promotion_details(self, slug: str) -> dict | None:
+        """
+        Build details from the promotions feed.
+
+        Epic 404s its content API for newer products and WAFs or client-renders the store
+        page, so for a giveaway this feed is the reliable source of name, description and art.
+        """
+        await self._ensure_free_games_cache()
+
+        element = self._find_promotion(slug)
+        name = str((element or {}).get("title") or "").strip()
+        if not element or not name:
+            return None
+
+        is_free = self._check_is_free(slug)
+        return {
+            "name": name,
+            "is_free": is_free,
+            "developers": [],
+            "publishers": [],
+            "release_date": None,
+            "image": self._promotion_image(element),
+            "description": element.get("description"),
+            "price_info": "Free to Play" if is_free else "Check Store",
+            "store_url": f"https://store.epicgames.com/en-US/p/{slug}",
+        }
 
     def _check_is_free(self, slug: str) -> bool:
-        for game in self.free_games_cache:
-            game_slug = game.get("productSlug") or game.get("urlSlug")
-            if game_slug == slug:
-                promotions = game.get("promotions") or {}
-                if promotions.get("promotionalOffers"):
-                    return True
-        return False
+        element = self._find_promotion(slug)
+        if not element:
+            return False
+
+        promotions = element.get("promotions") or {}
+        return bool(promotions.get("promotionalOffers"))
 
     async def _scrape_store_page(self, slug: str) -> dict | None:
         await self.rate_limiter.acquire()
@@ -124,7 +216,7 @@ class EpicAPIManager:
             # Extract Name and Image via shared helper
             og_data = extract_og_data(soup)
 
-            name = "Unknown Epic Game"
+            name = UNKNOWN_EPIC_NAME
             if og_data["title"]:
                 name = og_data["title"].replace(" | Download and Buy Today - Epic Games Store", "").strip()
 

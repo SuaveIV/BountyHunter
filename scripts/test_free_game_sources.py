@@ -5,7 +5,9 @@ Manual harness for the free-game fetchers.
     uv run python scripts/test_free_game_sources.py --offline   # parsers + filters only
 
 The offline mode replays small fixtures so the parsing and filtering rules can be checked
-without network access; live mode hits Epic, GamerPower and Bluesky for real.
+without network access; live mode hits Epic, GamerPower and Bluesky for real. Both apply the
+default announcement policy (games only, see FREE_GAMES_CONTENT_TYPES), so the report shows
+how many DLC and item giveaways the default filter drops.
 """
 
 import argparse
@@ -16,6 +18,7 @@ import aiohttp
 
 from bounty_core.fetcher import (
     CONTENT_DLC,
+    DEFAULT_CONTENT_TYPES,
     BlueskyFreeGamesFetcher,
     EpicFreeGamesFetcher,
     FreeGame,
@@ -97,12 +100,12 @@ OFFLINE_BLUESKY = {
 
 def report(games: list[FreeGame]) -> int:
     """Print accepted and rejected listings, then return a shell exit code."""
-    accepted = filter_games(games)
+    accepted = filter_games(games, DEFAULT_CONTENT_TYPES)
     unique = dedupe_games(accepted)
 
     rejected: dict[str, list[str]] = {}
     for game in games:
-        reason = rejection_reason(game)
+        reason = rejection_reason(game, DEFAULT_CONTENT_TYPES)
         if reason:
             rejected.setdefault(reason, []).append(f"{game.source}:{game.title}")
 

@@ -416,9 +416,10 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
     if not details and parsed.get("links"):
         details = await get_fallback_details(
             parsed["links"],
-            parsed.get("title") or parsed["text"],
+            parsed["text"],
             getattr(bot_any, "itad_manager", None),
             image=parsed.get("image"),
+            title=parsed.get("title"),
         )
 
     return details

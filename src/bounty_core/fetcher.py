@@ -189,6 +189,52 @@ CONTENT_LABELS = {
     CONTENT_BETA: "FREE BETA",
 }
 
+#: Every content type the fetchers can report.
+CONTENT_TYPES = frozenset({CONTENT_GAME, CONTENT_DLC, CONTENT_ITEM, CONTENT_BETA})
+
+#: Games only. GamerPower alone returns roughly three DLC or item giveaways for every game,
+#: which fills a channel faster than anyone wants to read it.
+DEFAULT_CONTENT_TYPES = frozenset({CONTENT_GAME})
+
+#: Spellings accepted in the content-type setting.
+CONTENT_TYPE_ALIASES = {
+    "game": CONTENT_GAME,
+    "games": CONTENT_GAME,
+    "dlc": CONTENT_DLC,
+    "dlcs": CONTENT_DLC,
+    "addon": CONTENT_DLC,
+    "addons": CONTENT_DLC,
+    "expansion": CONTENT_DLC,
+    "expansion pass": CONTENT_DLC,
+    "item": CONTENT_ITEM,
+    "items": CONTENT_ITEM,
+    "loot": CONTENT_ITEM,
+    "beta": CONTENT_BETA,
+    "betas": CONTENT_BETA,
+    "playtest": CONTENT_BETA,
+}
+
+
+def parse_content_types(value: str | None) -> frozenset[str]:
+    """
+    Parse a comma separated content-type setting, e.g. ``game,dlc``.
+
+    Unrecognised entries are logged and ignored, and a setting that names no known type
+    falls back to games rather than silently muting the channel.
+    """
+    if not value or not value.strip():
+        return DEFAULT_CONTENT_TYPES
+
+    requested = [token.strip().lower() for token in value.split(",") if token.strip()]
+    known = {CONTENT_TYPE_ALIASES[token] for token in requested if token in CONTENT_TYPE_ALIASES}
+    unknown = [token for token in requested if token not in CONTENT_TYPE_ALIASES]
+
+    if unknown:
+        logger.warning(f"Ignoring unknown content type(s) in configuration: {', '.join(unknown)}")
+
+    return frozenset(known) or DEFAULT_CONTENT_TYPES
+
+
 # --- Platform tokens --------------------------------------------------------
 
 PLATFORM_STEAM = "steam"
@@ -492,6 +538,13 @@ TASK_KEYWORDS = (
 
 NEWSLETTER_KEYWORDS = ("newsletter", "subscribe", "subscription")
 
+#: Task requirements that need a pattern rather than a phrase. Alienware Arena asks for
+#: "5 ARP (Alienware Rewards Points) to claim a key", which the keyword list let through.
+TASK_PATTERNS = (
+    re.compile(r"\b\d*\s*arp\b", re.IGNORECASE),
+    re.compile(r"\d+\s*rewards? points\b", re.IGNORECASE),
+)
+
 #: Bluesky posts are unstructured, so a Steam-tagged post only counts when it links
 #: somewhere we can verify. Structured fetchers carry clean links, so they are trusted.
 TRUSTED_STEAM_HOSTS = ("store.steampowered.com", "redd.it", "reddit.com")
@@ -505,7 +558,10 @@ def match_keywords(text: str, keywords: Sequence[str]) -> set[str]:
 
 def requires_tasks(text: str) -> bool:
     """True when the listing asks the user to complete a task (follow, subscribe, ...)."""
-    return bool(match_keywords(text, TASK_KEYWORDS))
+    if match_keywords(text, TASK_KEYWORDS):
+        return True
+
+    return any(pattern.search(text or "") for pattern in TASK_PATTERNS)
 
 
 def is_aggregate_thread(text: str) -> bool:
@@ -532,20 +588,26 @@ def is_task_exempt(game: FreeGame) -> bool:
     return "fanatical" in haystack
 
 
-def rejection_reason(game: FreeGame) -> str | None:
+def rejection_reason(game: FreeGame, allowed_content_types: frozenset[str] | None = None) -> str | None:
     """
     Explain why a listing should be dropped, or ``None`` when it should be announced.
 
-    Filtering runs in order: aggregate threads, excluded keywords, task giveaways, blocked
-    domains, the platform whitelist, and finally the Bluesky Steam trust rule. The
-    whitelist is what drops the mobile, STOVE, VR and DRM-free-only listings GamerPower
-    returns.
+    Filtering runs in order: aggregate threads, content type, excluded keywords, task
+    giveaways, blocked domains, the platform whitelist, and finally the Bluesky Steam trust
+    rule. The whitelist is what drops the mobile, STOVE, VR and DRM-free-only listings
+    GamerPower returns.
+
+    ``allowed_content_types`` is the caller's policy, read from configuration by the Discord
+    layer. ``None`` keeps every content type, which is what the core does by default.
     """
     text = game.text or ""
     lowered_text = text.lower()
 
     if is_aggregate_thread(game.title) or is_aggregate_thread(game.url):
         return "aggregate thread"
+
+    if allowed_content_types is not None and game.content_type not in allowed_content_types:
+        return "content type not enabled"
 
     if any(keyword in lowered_text for keyword in EXCLUDED_KEYWORDS):
         return "excluded keyword"
@@ -567,13 +629,13 @@ def rejection_reason(game: FreeGame) -> str | None:
     return None
 
 
-def filter_games(games: Sequence[FreeGame]) -> list[FreeGame]:
+def filter_games(games: Sequence[FreeGame], allowed_content_types: frozenset[str] | None = None) -> list[FreeGame]:
     """Apply :func:`rejection_reason` to every game and log a per-reason summary."""
     accepted: list[FreeGame] = []
     skipped: dict[str, int] = {}
 
     for game in games:
-        reason = rejection_reason(game)
+        reason = rejection_reason(game, allowed_content_types)
         if reason is None:
             accepted.append(game)
         else:
