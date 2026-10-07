@@ -6,7 +6,6 @@ from discord.ext import commands
 
 from bounty_core.db.engine import Database
 from bounty_core.epic_api_manager import EpicAPIManager
-from bounty_core.fetcher import RedditRSSFetcher
 from bounty_core.gog_api_manager import GogAPIManager
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch_api_manager import ItchAPIManager
@@ -65,7 +64,7 @@ class Gunship(commands.Bot):
         self.ps_manager = PSAPIManager(session=self._http_session)
         self.gog_manager = GogAPIManager(session=self._http_session)
         self.itad_manager = ItadAPIManager(session=self._http_session, api_key=ITAD_API_KEY)
-        self.scanner = SectorScanner(RedditRSSFetcher(self._http_session), self.store)
+        self.scanner = SectorScanner(self._http_session, self.store)
 
         # Setup Critical Error Logging to DM
         self.discord_log_handler = DiscordLoggingHandler(self)

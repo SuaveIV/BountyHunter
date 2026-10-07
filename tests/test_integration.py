@@ -4,7 +4,12 @@ import pytest
 
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.epic_api_manager import EpicAPIManager
-from bounty_core.fetcher import RedditRSSFetcher
+from bounty_core.fetcher import (
+    BlueskyFreeGamesFetcher,
+    EpicFreeGamesFetcher,
+    GamerPowerFreeGamesFetcher,
+    fetch_all_games,
+)
 from bounty_core.itad_api_manager import ItadAPIManager
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.itch_api_manager import ItchAPIManager
@@ -76,15 +81,20 @@ async def test_itad_integration(session):
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_scraper_feed(session):
-    """Test fetching and parsing the Reddit RSS feed."""
-    fetcher = RedditRSSFetcher(session)
-    posts = await fetcher.fetch_latest(limit=5)
+    """Test the fan-in across every free-game source."""
+    fetchers = [
+        EpicFreeGamesFetcher(session),
+        GamerPowerFreeGamesFetcher(session),
+        BlueskyFreeGamesFetcher(session),
+    ]
+    games = await fetch_all_games(fetchers)
 
-    assert isinstance(posts, list)
-    # Note: Feed might be empty depending on the actor/filter
+    assert isinstance(games, list)
+    for game in games:
+        assert game.source in {"epic", "gamerpower", "bluesky"}
+        assert game.title
+        assert game.url.startswith("http")
 
-    if posts:
-        post = posts[0]
-        assert "id" in post
-        assert "title" in post
-        assert "url" in post
+    if games:
+        game = games[0]
+        assert game.dedupe_key.startswith(f"{game.source}:")

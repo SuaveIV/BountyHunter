@@ -11,6 +11,7 @@ from bounty_core.exceptions import (
     RateLimitExceeded,
 )
 from bounty_core.network import HEADERS
+from bounty_core.parser import titles_match
 
 logger = logging.getLogger(__name__)
 
@@ -114,11 +115,10 @@ class ItadAPIManager:
         Convenience method to search for a game and get its best price details.
         Returns a dict containing 'game_info' and 'price_info' if found.
         """
-        games = await self.search_game(title, limit=1)
-        if not games:
+        game = await self.search_verified(title)
+        if not game:
             return None
 
-        game = games[0]
         game_id = game["id"]
 
         overview = await self.get_game_overview([game_id], country=country)
@@ -141,25 +141,26 @@ class ItadAPIManager:
     ) -> dict | None:
         """
         Attempts to find a game using available IDs or title, returning a standardized details dict.
+
+        Steam IDs and Epic slugs are exact identifiers and are trusted as-is. Title searches
+        are fuzzy: ITAD answers a bad query with its best guess rather than nothing, so a
+        candidate is only accepted when its title actually looks like what we searched for
+        (see :func:`bounty_core.parser.titles_match`). That keeps a failed lookup a failure
+        instead of announcing an unrelated game.
         """
         game = None
 
-        # 1. Try Steam ID
+        # 1. Try Steam ID (exact match, no title validation needed)
         if steam_ids:
             game = await self.lookup_game("steam", steam_ids[0])
 
         # 2. Try Epic Slug (via search)
         if not game and epic_slugs:
-            search_term = epic_slugs[0].replace("-", " ")
-            results = await self.search_game(search_term, limit=1)
-            if results:
-                game = results[0]
+            game = await self.search_verified(epic_slugs[0].replace("-", " "))
 
         # 3. Try Title
         if not game and title:
-            results = await self.search_game(title, limit=1)
-            if results:
-                game = results[0]
+            game = await self.search_verified(title)
 
         if game:
             assets = game.get("assets", {})
@@ -175,4 +176,18 @@ class ItadAPIManager:
                 "image": image,
                 "price_info": "Free to Play",
             }
+        return None
+
+    async def search_verified(self, title: str) -> dict | None:
+        """Search ITAD by title and return the best candidate that actually matches it."""
+        if not title:
+            return None
+
+        results = await self.search_game(title, limit=5)
+        for result in results:
+            candidate = result.get("title") or ""
+            if titles_match(title, candidate):
+                return result
+
+        logger.debug(f"ITAD had no title match for '{title}'")
         return None

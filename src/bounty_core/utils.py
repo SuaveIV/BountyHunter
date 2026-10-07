@@ -22,9 +22,8 @@ async def enhance_details_with_itad(details: dict[str, Any], itad_manager: ItadA
     # If image is missing, try to find it
     if not details.get("image"):
         try:
-            results = await itad_manager.search_game(title, limit=1)
-            if results:
-                game_info = results[0]
+            game_info = await itad_manager.search_verified(title)
+            if game_info:
                 assets = game_info.get("assets", {})
                 banner = assets.get("banner400") or assets.get("banner300") or assets.get("boxArt")
                 if banner:

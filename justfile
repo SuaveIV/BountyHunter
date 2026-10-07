@@ -125,6 +125,16 @@ test-watch:
     @echo "👀 Running tests in watch mode..."
     mise exec -- uv run ptw
 
+# Exercise the free-game fetchers against the live feeds
+test-sources:
+    @echo "🛰️  Testing free-game sources..."
+    mise exec -- uv run python scripts/test_free_game_sources.py
+
+# Exercise the free-game fetchers with offline fixtures (no network required)
+test-sources-offline:
+    @echo "🛰️  Testing free-game sources (offline fixtures)..."
+    mise exec -- uv run python scripts/test_free_game_sources.py --offline
+
 # Run ruff linter
 lint:
     @echo "🔍 Running ruff linter..."

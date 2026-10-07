@@ -29,7 +29,9 @@ async def test_create_game_embed_steam():
     assert embed.url == details["store_url"]
     assert embed.color and embed.color.value == 65280  # Green #00FF00
     assert embed.description == "A cool game"
-    assert embed.image.url == "http://img.com/123"
+    # Image embedding was deliberately removed: the store/Reddit thumbnails were often
+    # wrong. The embed should not set one, even when details carry an image.
+    assert embed.image.url is None
 
     # Check fields
     fields = {f.name: f.value for f in embed.fields}
@@ -90,14 +92,14 @@ async def test_enhance_details_with_itad_success():
 
     mock_manager = MagicMock()
     mock_manager.api_key = "test_key"
-    mock_manager.search_game = AsyncMock(
-        return_value=[{"title": "Portal", "assets": {"banner400": "http://img.com/portal.jpg"}}]
+    mock_manager.search_verified = AsyncMock(
+        return_value={"title": "Portal", "assets": {"banner400": "http://img.com/portal.jpg"}}
     )
 
     await enhance_details_with_itad(details, mock_manager)
 
     assert details["image"] == "http://img.com/portal.jpg"
-    mock_manager.search_game.assert_called_once_with("Portal", limit=1)
+    mock_manager.search_verified.assert_called_once_with("Portal")
 
 
 @pytest.mark.asyncio
@@ -105,7 +107,7 @@ async def test_enhance_details_with_itad_no_result():
     details = {"name": "Unknown Game", "image": None}
     mock_manager = MagicMock()
     mock_manager.api_key = "test_key"
-    mock_manager.search_game = AsyncMock(return_value=[])
+    mock_manager.search_verified = AsyncMock(return_value=None)
 
     await enhance_details_with_itad(details, mock_manager)
 

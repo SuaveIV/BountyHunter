@@ -17,8 +17,10 @@ DENY_DOMAINS = frozenset(
         "givee.club",
         "gleam.io",
         "indiegala.com",
+        "keymailer",
         "rafflecopter.com",
         "woobox.com",
+        "woovit",
         "stove.com",
         "onstove.com",
     }

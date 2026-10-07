@@ -12,7 +12,7 @@ from discord.ext import commands
 
 from bounty_core.epic import get_game_details as get_epic_details
 from bounty_core.exceptions import AccessDenied, BountyException
-from bounty_core.fetcher import TARGET_ACTOR
+from bounty_core.fetcher import CONTENT_LABELS, SOURCE_LABELS
 from bounty_core.gog import get_game_details as get_gog_details
 from bounty_core.itch import get_game_details as get_itch_details
 from bounty_core.parser import extract_game_title
@@ -136,21 +136,28 @@ async def create_game_embed(details: dict, parsed: dict) -> discord.Embed:
     links = parsed.get("links") or [""]
     store_url = details.get("store_url") or links[0]
 
-    # Determine prefix based on parsed type
-    post_type = parsed.get("type", "UNKNOWN")
-    if post_type == "GAME":
-        title_prefix = "FREE GAME"
-    elif post_type == "ITEM":
-        title_prefix = "FREE ITEM"
-    else:
-        title_prefix = "FREE"
+    # Announce DLC and items as such rather than dropping or mislabelling them. Falls back
+    # to the legacy parsed "type" for callers that build a parsed dict by hand.
+    title_prefix = CONTENT_LABELS.get(parsed.get("content_type") or "")
+    if not title_prefix:
+        post_type = parsed.get("type", "UNKNOWN")
+        if post_type == "GAME":
+            title_prefix = "FREE GAME"
+        elif post_type == "ITEM":
+            title_prefix = "FREE ITEM"
+        else:
+            title_prefix = "FREE"
 
     embed = discord.Embed()
     embed.title = f"{title_prefix}: {details.get('name', 'Unknown Game')}"
     embed.url = store_url or None
 
-    # Footer keeps BountyHunter branding but dynamic TARGET_ACTOR
-    embed.set_footer(text=f"BountyHunter • Free Game Scout • {TARGET_ACTOR}")
+    # Footer keeps BountyHunter branding, plus the source that found the listing.
+    source_label = SOURCE_LABELS.get(parsed.get("source") or "")
+    footer = "BountyHunter • Free Game Scout"
+    if source_label:
+        footer += f" • via {source_label}"
+    embed.set_footer(text=footer)
 
     # Find matching store config
     matched_config = None
@@ -394,11 +401,11 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
     # Universal Fallback: Use ITAD if no store succeeded
     if not details and getattr(bot_any, "itad_manager", None):
         raw_text = parsed.get("text", "")
-        # BUG FIX: Pass a clean game title to ITAD rather than the raw Reddit post text.
+        # BUG FIX: Pass a clean game title to ITAD rather than the raw post text.
         # e.g. "[Steam] (Game) Portal is free!" → "Portal"
-        # Passing the raw string would produce garbage ITAD matches. Only fall back to
-        # the raw text if the regex can't extract a structured title (e.g. Amazon posts).
-        itad_title = extract_game_title(raw_text) or raw_text or None
+        # Normalized listings already carry a clean title; otherwise fall back to the
+        # regex, and only pass raw text when nothing structured is available.
+        itad_title = parsed.get("title") or extract_game_title(raw_text) or raw_text or None
         details = await bot_any.itad_manager.find_game(
             steam_ids=list(steam_ids) if steam_ids else None,
             epic_slugs=list(epic_slugs) if epic_slugs else None,
@@ -408,7 +415,10 @@ async def resolve_game_details(bot: commands.Bot, parsed: dict[str, Any]) -> dic
     # Fallback: use generic details if specific manager didn't handle it
     if not details and parsed.get("links"):
         details = await get_fallback_details(
-            parsed["links"], parsed["text"], getattr(bot_any, "itad_manager", None), image=parsed.get("image")
+            parsed["links"],
+            parsed.get("title") or parsed["text"],
+            getattr(bot_any, "itad_manager", None),
+            image=parsed.get("image"),
         )
 
     return details
